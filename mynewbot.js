@@ -62,17 +62,17 @@ bot.on('speak', function (data)
     //Respond to "/info" command
     if (text.match(/^\/info$/))
     {
-	bot.pm('These are the commands I understand:\n'+
-	       '/hello   --> I say hello to you\n'+
-	       '/votes   --> the vote count for current song\n'+
-	       '/bop     --> I vote for the current song\n'+
-	       '/botup   --> I get up and DJ\n'+
-	       '/botdown --> I stop DJing\n'+
-	       '/skip    --> if DJing, I skip the current song\n'+
-	       '/info    --> I\'ll pm you a list of commands\n'
-	       , name);
+	bot.pm('These are the commands I understand:\n\n'+
+	       '/hello   --> I say hello to you\n\n'+
+	       '/votes   --> the vote count for current song\n\n'+
+	       '/bop     --> I vote for the current song\n\n'+
+	       '/botup   --> I get up and DJ\n\n'+
+	       '/botdown --> I stop DJing\n\n'+
+	       '/skip    --> if DJing, I skip the current song\n\n'+
+	       '/info    --> I\'ll pm you a list of commands\n\n'
+	       , data.userid);
 
-	console.log('Pmmed ', data.userid);
+	console.log('Pmmed ' +data.name+ ' (' +data.userid+ ')');
     }
 
     //Respond to "/botup" command

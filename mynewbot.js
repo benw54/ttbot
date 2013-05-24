@@ -72,7 +72,7 @@ bot.on('speak', function (data)
 	       '/info    --> I\'ll pm you a list of commands\n'
 	       , name);
 
-	console.log('Pmmed ', name);
+	console.log('Pmmed ', data.userid);
     }
 
     //Respond to "/botup" command
@@ -269,9 +269,12 @@ bot.on('update_votes', function (data)
 		     if (bot_dj == 0 && snag_flag == 0 && vote_count > 2 && vratio >= 0.5)
 			 {
 			     bot.speak('Everyone seems to like this song, I\'m snagging it');
+			     //doesn't actually snag, only makes the little heart happen
 			     bot.snag();
 			     console.log('ratio over half... adding song to queue');
-			     bot.playlistAdd(data.room.metadata.current_song._id);
+			     // playlist is pretty big, let's stick the
+			     // new song at index 40 since we shuffle regularly now
+			     bot.playlistAdd(data.room.metadata.current_song._id, 40);
 			     add_count++;
 			     snag_flag = 1;
 			 }
@@ -290,12 +293,12 @@ bot.on('roomChanged', function (data)
 		     console.log('Num Listeners: '+ real_list); 
 		 });
 
-    console.log('FROM ROOMCHANGED');
+//    console.log('FROM ROOMCHANGED');
 //    console.log(data);
 
 
   //This should really be done in bot.on('registered'...) ... as well?
-    //connect to database to add unkown users
+    //connect to database to add unknown users
     var uclient = new pg.Client(conString);
     
     uclient.connect();
@@ -363,6 +366,7 @@ function informRoom(str, userid)
 
     bot.roomInfo( true, function (data)
 		  {
+		      // should get this by filtering @tt_stats too... later
 		      real_list = data.room.metadata.listeners -1;
 		      vote_count = data.room.metadata.upvotes;
 		      var vratio = vote_count / real_list;

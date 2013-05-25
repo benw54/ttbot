@@ -62,17 +62,7 @@ bot.on('speak', function (data)
     //Respond to "/info" command
     if (text.match(/^\/info$/))
     {
-	bot.pm('These are the commands I understand:\n\n'+
-	       '/hello   --> I say hello to you\n\n'+
-	       '/votes   --> the vote count for current song\n\n'+
-	       '/bop     --> I vote for the current song\n\n'+
-	       '/botup   --> I get up and DJ\n\n'+
-	       '/botdown --> I stop DJing\n\n'+
-	       '/skip    --> if DJing, I skip the current song\n\n'+
-	       '/info    --> I\'ll pm you a list of commands\n\n'
-	       , data.userid);
-
-	console.log('Pmmed ' +data.name+ ' (' +data.userid+ ')');
+	pmCMD(data.name, data.userid);
     }
 
     //Respond to "/botup" command
@@ -113,18 +103,9 @@ bot.on('speak', function (data)
 });
 
 bot.on('pmmed', function (data){
-    console.log('FROM PMMED');
-    console.log(data);
-    
-    bot.pm('Commands I understand:\n', data.senderid);
-    bot.pm('/hello   --> I say hello to you\n', data.senderid);
-    bot.pm('/votes   --> the vote count for current song\n', data.senderid);
-    bot.pm('/bop     --> I vote for the current song\n', data.senderid);
-    bot.pm('/botup   --> I get up and DJ\n', data.senderid);
-    bot.pm('/botdown --> I stop DJing\n', data.senderid);
-    bot.pm('/skip    --> if DJing, I skip the current song\n', data.senderid);
-    bot.pm('/info    --> I\'ll pm you a list of commands\n', data.senderid);
-    console.log('Pmmed ', data.senderid);
+    // want to make bot respond to different commands from PM
+    // for now, just PM back a list of commands
+    pmCMD(null, data.senderid);
 });
 
 
@@ -283,87 +264,28 @@ bot.on('update_votes', function (data)
 
 });
 
-bot.on('roomChanged', function (data)
-{
-    console.log('Logged into Room!');
-    bot.roomInfo(true, function (data)
-		 {
-		     var real_list = data.room.metadata.listeners -1;
-		     
-		     console.log('Num Listeners: '+ real_list); 
-		 });
+bot.on('registered', function(data){
 
-//    console.log('FROM ROOMCHANGED');
-//    console.log(data);
+    // add users (if unknown) to db
+    addNewUsers();
+});
+
+bot.on('roomChanged', function(data){
+    var real_list = data.room.metadata.listeners -1; 
+
+    console.log('Logged Into Room!');
+    console.log('Num Listeners: ' +real_list);
 
 
-  //This should really be done in bot.on('registered'...) ... as well?
-    //connect to database to add unknown users
-    var uclient = new pg.Client(conString);
+    // Stupid... bot logs into room and then hears its own
+    // event for 'registered' don't do this here or it happens twice
+    //    addNewUsers();
     
-    uclient.connect();
     
-    uclient.on('error', function(error){
-	console.log('There was an error: (' +error+')');
-	uclient.end();
-    });
-    
-    uclient.on('end', function(){
-	uclient.end();
-    });
-    
-
-    for (var i = 0 ; i < data.users.length; i++)
-    {
-	var userid = data.users[i].userid;
-	var username = data.users[i].name;
-
-
-	// Stupid freaking non-blocking queries... tagging query result so when row event occurs, we have a way of
-	// telling which query result we are getting. There must be a better way? An array of query objects maybe?
-	// Documentation mentions Result object... look into that more
-
-	var userdb = uclient.query("SELECT count(*) num, '" +i+ "' qn from user_info WHERE userid = '" +userid+ "';");
-
-	userdb.on('error', function(error){
-	    console.log('There was an error: (' +error+ ')');
-	});
-
-	userdb.on('row',function(row){
-	    if (typeof row.num == 'number' && row.num == 0)
-	    {
-		var j = row.qn;
-		//		console.log('userdb row.num = ' +row.num+ 'for username = ' +data.users[j].name+ '('+data.users[j].userid+ ') and qn = ' +row.qn);
-		console.log('Added ' +data.users[j].name+ ' (' +data.users[j].userid+ ') to user database');
-
-		var newuserdb = uclient.query("INSERT INTO user_info VALUES ('"+data.users[j].userid+"','" +data.users[j].name+ "');");
-	    
-		newuserdb.on('row', function(row){
-		    console.log(row);
-		});
-		//	    newuserdb.on('end', function(){
-		//		uclient.end();
-		//	    });
-		newuserdb.on('error', function(error){
-		    console.log('There was an error: (' +error+ ')');
-		    console.log('With userid: ' +data.users[j].userid+ ' name: ' +data.users[j].name+ ' qnum: ' +j);
-		    //		uclient.end();
-		});
-	    }
-	});
-    }
-
-
-
 });
 
 function informRoom(str, userid)
 {
-//    console.log('Called getUsername function for ' +userid);
-
-//    if (userid == null)
-//	return;
-
     bot.roomInfo( true, function (data)
 		  {
 		      // should get this by filtering @tt_stats too... later
@@ -448,4 +370,89 @@ function shuffle()
 //    for (i = 0; i < len; i++)
 //	console.log('move index ' +idx1[i]+ ' to index ' +idx2[i]);   
     
+}
+
+
+function addNewUsers()
+{
+
+    bot.roomInfo(false, function(data){
+	//connect to database to add unknown users
+	var uclient = new pg.Client(conString);
+	
+	uclient.connect();
+	
+	uclient.on('error', function(error){
+	    console.log('There was an error: (' +error+')');
+	    uclient.end();
+	});
+	
+	uclient.on('end', function(){
+	    uclient.end();
+	});
+	
+	
+	for (var i = 0 ; i < data.users.length; i++)
+	{
+	    var userid = data.users[i].userid;
+	    var username = data.users[i].name;
+	    
+	    
+	    // Stupid freaking non-blocking queries... tagging query result so when row event occurs, we have a way of
+	    // telling which query result we are getting. There must be a better way? An array of query objects maybe?
+	    // Documentation mentions Result object... look into that more
+	    
+	    var userdb = uclient.query("SELECT count(*) num, '" +i+ "' qn from user_info WHERE userid = '" +userid+ "';");
+	    
+	    userdb.on('error', function(error){
+		console.log('There was an error: (' +error+ ')');
+	    });
+	    
+	    userdb.on('row',function(row){
+		if (typeof row.num == 'number' && row.num == 0)
+		{
+		    var j = row.qn;
+		    //		console.log('userdb row.num = ' +row.num+ 'for username = ' +data.users[j].name+ '('+data.users[j].userid+ ') and qn = ' +row.qn);
+		    console.log('Added ' +data.users[j].name+ ' (' +data.users[j].userid+ ') to user database');
+		    
+		    var newuserdb = uclient.query("INSERT INTO user_info VALUES ('"+data.users[j].userid+"','" +data.users[j].name+ "');");
+		    
+		    newuserdb.on('row', function(row){
+			console.log(row);
+		    });
+		    //	    newuserdb.on('end', function(){
+		    //		uclient.end();
+		    //	    });
+		    newuserdb.on('error', function(error){
+			console.log('There was an error: (' +error+ ')');
+			console.log('With userid: ' +data.users[j].userid+ ' name: ' +data.users[j].name+ ' qnum: ' +j);
+			//		uclient.end();
+		    });
+		}
+	    });
+	}
+    });
+
+    console.log('Added Unknown users to DB');
+}
+
+function pmCMD(name, userid)
+{
+	bot.pm('These are the commands I understand:\n\n', userid, function(){
+	bot.pm('/hello   --> I say hello to you\n\n',      userid, function(){
+	bot.pm('/votes   --> the vote count for current song\n\n', userid, function(){
+	bot.pm('/bop     --> I vote for the current song\n\n', userid, function(){
+	bot.pm('/botup   --> I get up and DJ\n\n',         userid, function(){
+	bot.pm('/botdown --> I stop DJing\n\n', userid, function(){
+	bot.pm('/skip    --> if DJing, I skip the current song\n\n', userid, function(){
+	bot.pm('/info    --> I\'ll pm you a list of commands\n\n', userid);
+	});
+	});
+	});
+	});
+	});
+	});
+	});
+
+	console.log('Pmmed ' +name+ '(' +userid+ ')');    
 }

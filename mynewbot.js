@@ -37,26 +37,34 @@ bot.on('speak', function (data)
 	console.log('About to Bop');
 	console.log(data);
 
-	if (vote_flag == 1)
-	    bot.speak('I already voted');
-
-//	else if (data.room.metadata.current_dj == USERID)
-//	    bot.speak('uh, I\'m the dj... I can\'t vote');
-
-	else
+	bot.roomInfo(false, function(data){
+	    console.log(data);
+	    if (vote_flag == 1)
+		bot.speak('I already voted');
+	    
+	    else if (data.room.metadata.current_dj == USERID)
+		bot.speak('uh, I\'m the dj... I can\'t vote');
+	    
+	    else
 	    {
 		bot.speak('OK, I\'ll vote for this song '+name);
 		bot.bop();
 		vote_flag = 1;
 	    }
-
+	});
 
     }	
 
     //Respond to "/votes" command
     if (text.match(/^\/votes$/))
     {
-	bot.speak('Vote count for this song is '+vote_count);
+//	bot.speak('Vote count for this song is '+vote_count);
+	bot.roomInfo(false, function(data){
+	    var up = data.room.metadata.upvotes;
+	    var down = data.room.metadata.downvotes;
+	    bot.speak('Current song votes - up: ' +up+ ' down: ' +down);
+	});
+
     }
 
     //Respond to "/info" command
@@ -69,9 +77,8 @@ bot.on('speak', function (data)
     if (text.match(/^\/botup$/))
     {
 	console.log(name+ ' wants bot to DJ');
-	shuffle();
-	bot.addDj(function (){
-	    //set bot_dj flag in callback
+	shuffle(function(){
+	    bot.addDj();
 	    bot_dj = 1;
 	});
     }
@@ -80,10 +87,8 @@ bot.on('speak', function (data)
     if (text.match(/^\/botdown$/))
     {
 	console.log(name+ ' wants bot to stop DJing');
-	bot.remDj(USERID, function(){
-	    //clear bot_dj flag in callback
-	    bot_dj = 0;
-	});
+	bot.remDj(USERID);
+	bot_dj = 0;
     }
 
     //Respond to "/skip" command
@@ -119,7 +124,8 @@ bot.on('snagged', function (data)
 
 bot.on('newsong', function (data)
 {
-    //new song... vote count starts from zero
+    // new song... vote count starts from zero
+    // vote_count isn't needed now we use roomInfo data
     vote_count = 0;
     vote_flag = 0;
     snag_flag = 0;
@@ -323,53 +329,61 @@ function informRoom(str, userid)
 }
 
 
-function shuffle()
+function shuffle(callback)
 {
 
     bot.playlistAll(function(data){
-	var len = data.list.length;
+//	var len = data.list.length;
+
+
+	// does the bot remain unresponsive for as long if we only shuffle 1/4 of the playlist?
+	// short answer... no
+	// but does the playlist get shuffled enough?
+	var len = Math.floor(data.list.length/4);
 	
 	var idx1 = [];
 	var idx2 = [];
 
 
 	// creating two arrays of indices, unique from each other
+	// idx1 will be in numeric order, idx2 will be random order
 	for (var i = 0 ; i < len; i++)
 	{
-	    idx1[i] = Math.floor(Math.random() * len);
+	    idx1[i] = i;
 	    idx2[i] = Math.floor(Math.random() * len);
 	    
 	    for (var j = 0; j < i; j++)
 	    {
-		// if number is already present in first array, try a new one
-		if (idx1[j] == idx1[i])
+		// if number is already present in array, try a new one
+		if (idx2[j] == idx2[i])
 		{
-		    idx1[i] = Math.floor(Math.random() * len);
+		    idx2[i] = Math.floor(Math.random() * len);
 		    j = -1; 
 		}
-		
-		// if second array's order matches first array, try again
+
+		// if second index matches first, try again
 		if (idx1[j] == idx2[j])
 		{
 		    idx2[j] = Math.floor(Math.random() * len);
 		    j = -1;
 		}
-		
 	    }
 	}
 	
 	// reorder songs in playlist using those indices
 	for (i = 0; i < len; i++)
-	    bot.playlistReorder(idx1[i], idx2[i]);
+	    bot.playlistReorder(idx2[i], idx1[i]);
 
-
-	console.log('Playlist has ' +data.list.length+ ' songs');;
+	console.log('Playlist has ' +data.list.length+ ' songs');
+//	callback();
     });
 
 // -- debug --
 //    for (i = 0; i < len; i++)
 //	console.log('move index ' +idx1[i]+ ' to index ' +idx2[i]);   
     
+    callback();
+
 }
 
 

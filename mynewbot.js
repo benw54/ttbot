@@ -3,6 +3,7 @@ var pg     = require('pg');
 
 var AUTH   = 'dNcValPLtHqLzNkHrsrfsGJb';
 var USERID = '517c27a6eb35c118e362e03e';
+var BOTNAME= 'benthebot';
 var ROOMID = '4fd1dd4daaa5cd11a1000061';
 
 // postgres database info -- tcp://user@host:port/dbname
@@ -35,10 +36,10 @@ bot.on('speak', function (data)
     if (text.match(/^\/bop$/))
     {
 	console.log('About to Bop');
-	console.log(data);
+//	console.log(data);
 
 	bot.roomInfo(false, function(data){
-	    console.log(data);
+//	    console.log(data);
 	    if (vote_flag == 1)
 		bot.speak('I already voted');
 	    
@@ -221,6 +222,35 @@ bot.on('endsong', function (data)
 
     add_count = 0;
 
+
+    // prevent users leaving bot playing by himself in the room when they leave
+    if (data.room.metadata.djcount == 1)
+    {
+	if (data.room.metadata.current_dj == USERID)
+	{
+	    bot.roomInfo(false, function(data){
+
+		var audience = 0;
+		for (var i = 0; i < data.users.length; i++)
+		{
+		    var name = data.users[i].name;
+
+		    if (!name.match('Guest') && !name.match(BOTNAME))
+			audience++;
+		}
+		
+		if (audience == 0)
+		{
+		    console.log('no one is listening anymore, stop DJing');
+		    bot.remDj(USERID);
+		    bot_dj = 0;
+		}
+
+		else
+		    console.log('someone is still listening');
+	    });
+	}
+    }
 });
 
 bot.on('update_votes', function (data)

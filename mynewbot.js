@@ -438,21 +438,23 @@ function addNewUsers()
 
 function pmCMD(name, userid)
 {
-	bot.pm('These are the commands I understand:\n\n', userid, function(){
-	bot.pm('/hello   --> I say hello to you\n\n',      userid, function(){
-	bot.pm('/votes   --> the vote count for current song\n\n', userid, function(){
-	bot.pm('/bop     --> I vote for the current song\n\n', userid, function(){
-	bot.pm('/botup   --> I get up and DJ\n\n',         userid, function(){
-	bot.pm('/botdown --> I stop DJing\n\n', userid, function(){
-	bot.pm('/skip    --> if DJing, I skip the current song\n\n', userid, function(){
-	bot.pm('/info    --> I\'ll pm you a list of commands\n\n', userid);
-	});
-	});
-	});
-	});
-	});
-	});
-	});
 
-	console.log('Pmmed ' +name+ '(' +userid+ ')');    
+    //chaining callbacks to pm in correct order
+    bot.pm('These are the commands I understand:\n\n', userid, function(){
+	bot.pm('/hello   --> I say hello to you\n\n', userid, function(){
+	    bot.pm('/votes   --> the vote count for current song\n\n', userid, function(){
+		bot.pm('/bop     --> I vote for the current song\n\n', userid, function(){
+		    bot.pm('/botup   --> I get up and DJ\n\n', userid, function(){
+			bot.pm('/botdown --> I stop DJing\n\n', userid, function(){
+			    bot.pm('/skip    --> if DJing, I skip the current song\n\n', userid, function(){
+				bot.pm('/info    --> I\'ll pm you a list of commands\n\n', userid);
+			    });
+			});
+		    });
+		});
+	    });
+	});
+    });
+    
+    console.log('Pmmed ' +name+ '(' +userid+ ')');    
 }

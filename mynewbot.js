@@ -650,4 +650,16 @@ var sdb2 = sclient.query("SELECT username, AVG(upvotes + 2*adds - downvotes) sco
 	    bot.speak('Most Popular DJ: ' +row.username);
     });
 
+    var sdb3 = sclient.query('SELECT artist, title, count(play_info.songid) plays from song_info, play_info WHERE song_info.songid = play_info.songid GROUP BY song_info.artist, song_info.title ORDER BY plays DESC LIMIT 1;');
+
+    sdb3.on('error', function(error){
+	console.log('There was a query error... ' +error);
+    });
+    
+    sdb3.on('row', function(row){
+	if (type.match('pm'))
+	    bot.pm('Most Played Song: ' +row.artist+ ' - ' +row.title, userid);
+	else
+	    bot.speak('Most Played Song: ' +row.artist+ ' - ' +row.title);
+    });
 }

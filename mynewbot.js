@@ -105,11 +105,16 @@ bot.on('speak', function (data)
 
     }
 
+    // Respond to "/stats" command
+    if (text.match(/^\/stats$/))
+    {
+	stats('room', name, null);
+    }
+    
 });
 
 bot.on('pmmed', function (data){
-    // want to make bot respond to different commands from PM
-    // for now, just PM back a list of commands
+
     var text = data.text;
     var userid = data.senderid;
     var name = '';
@@ -192,7 +197,11 @@ bot.on('pmmed', function (data){
 	    }
 	}	
 
-
+	// Respond to "/stats" command
+	if (text.match(/^\/stats$/))
+	{
+	    stats('pm', name, userid);
+	}
 	
     });
 });
@@ -594,4 +603,51 @@ function pmCMD(name, userid)
     });
     
     console.log('Pmmed ' +name+ '(' +userid+ ')');    
+}
+
+
+function stats(type, name, userid)
+{
+    console.log('stats function called ' +type+ ' / ' +name+ ' / ' +userid);
+
+    var sclient = new pg.Client(conString);
+
+    sclient.connect();
+
+    sclient.on('error', function(error){
+	console.log('There was an error... ' +error);
+    });
+
+    sclient.on('end', function(){
+	sclient.end();
+    });
+
+
+    var sdb1 = sclient.query("SELECT artist, title, username, to_char(date, 'MM-DD-YY') date from play_info INNER JOIN user_info USING (userid) INNER JOIN song_info USING (songid) where upvotes = (SELECT MAX(upvotes) from play_info) ORDER BY adds DESC LIMIT 1;");
+
+    sdb1.on('error', function(error){
+	console.log('There was a query error... ' +error);
+    });
+    
+    sdb1.on('row', function(row){
+	if (type.match('pm'))
+	    bot.pm('Most Popular Song: ' +row.artist+ ' - ' +row.title+ ' played by ' + row.username+ ' on ' +row.date, userid);
+	else
+	    bot.speak('Most Popular Song: ' +row.artist+ ' - ' +row.title+ ' played by ' + row.username+ ' on ' +row.date);
+    });
+
+
+var sdb2 = sclient.query("SELECT username, AVG(upvotes + 2*adds - downvotes) score from user_info, play_info where user_info.userid = play_info.userid GROUP BY user_info.username ORDER BY score DESC LIMIT 1;");
+
+    sdb2.on('error', function(error){
+	console.log('There was a query error... ' +error);
+    });
+    
+    sdb2.on('row', function(row){
+	if (type.match('pm'))
+	    bot.pm('Most Popular DJ: ' +row.username, userid);
+	else
+	    bot.speak('Most Popular DJ: ' +row.username);
+    });
+
 }

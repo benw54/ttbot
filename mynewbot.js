@@ -59,7 +59,6 @@ bot.on('speak', function (data)
     //Respond to "/votes" command
     if (text.match(/^\/votes$/))
     {
-//	bot.speak('Vote count for this song is '+vote_count);
 	bot.roomInfo(false, function(data){
 	    var up = data.room.metadata.upvotes;
 	    var down = data.room.metadata.downvotes;
@@ -111,7 +110,91 @@ bot.on('speak', function (data)
 bot.on('pmmed', function (data){
     // want to make bot respond to different commands from PM
     // for now, just PM back a list of commands
-    pmCMD(null, data.senderid);
+    var text = data.text;
+    var userid = data.senderid;
+    var name = '';
+
+    bot.roomInfo(false, function(data){
+
+	for (var i = 0; i < data.users.length; i++)
+	{
+	    if (data.users[i].userid == userid)
+		name = data.users[i].name;
+	}
+	
+	//Respond to "/info" command
+	if (text.match(/^\/info$/))
+	{
+	    pmCMD(name, userid);
+	}
+	
+	//Respond to "/votes" command
+	if (text.match(/^\/votes$/))
+	{
+	    var up = data.room.metadata.upvotes;
+	    var down = data.room.metadata.downvotes;
+	    bot.pm('Current song votes - up: ' +up+ ' down: ' +down, userid);
+	}
+	
+	//Respond to "/botup" command
+	if (text.match(/^\/botup$/))
+	{
+	    console.log(name+ ' wants bot to DJ');
+	    shuffle(function(){
+		bot.addDj();
+		bot_dj = 1;
+	    });
+	}
+	
+	//Respond to "/botdown" command
+	if (text.match(/^\/botdown$/))
+	{
+	    console.log(name+ ' wants bot to stop DJing');
+	    bot.remDj(USERID);
+	    bot_dj = 0;
+	}
+	
+	//Respond to "/skip" command
+	if (text.match(/^\/skip$/))
+	{
+	    console.log(name+ ' wants bot to skip the song');
+	    if (bot_dj == 1)
+	    {
+		bot.skip();
+		bot.speak(name+ ' wants me to skip this song');
+	    }
+
+	    else
+		bot.pm('Sorry, I\'m not the DJ... can\'t skip', userid);
+	    
+	}
+	
+	// Respond to "/hello" command
+	if (text.match(/^\/hello$/)) 
+	{
+	    bot.pm('Hey! How are you '+name+'?', userid);
+	}
+	
+	//Respond to "/bop" command
+	if (text.match(/^\/bop$/))
+	{
+	    if (vote_flag == 1)
+		bot.pm('I already voted', userid);
+	    
+	    else if (data.room.metadata.current_dj == USERID)
+		bot.pm('uh, I\'m the dj... I can\'t vote', userid);
+	    
+	    else
+	    {
+		bot.speak('OK, I\'ll vote for this song '+name);
+		bot.bop();
+		vote_flag = 1;
+	    }
+	}	
+
+
+	
+    });
 });
 
 
@@ -223,34 +306,6 @@ bot.on('endsong', function (data)
     add_count = 0;
 
 
-    // prevent users leaving bot playing by himself in the room when they leave
-    if (data.room.metadata.djcount == 1)
-    {
-	if (data.room.metadata.current_dj == USERID)
-	{
-	    bot.roomInfo(false, function(data){
-
-		var audience = 0;
-		for (var i = 0; i < data.users.length; i++)
-		{
-		    var name = data.users[i].name;
-
-		    if (!name.match('Guest') && !name.match(BOTNAME))
-			audience++;
-		}
-		
-		if (audience == 0)
-		{
-		    console.log('no one is listening anymore, stop DJing');
-		    bot.remDj(USERID);
-		    bot_dj = 0;
-		}
-
-		else
-		    console.log('someone is still listening');
-	    });
-	}
-    }
 });
 
 bot.on('update_votes', function (data)
@@ -305,6 +360,44 @@ bot.on('registered', function(data){
     // add users (if unknown) to db
     addNewUsers();
 });
+
+bot.on('deregistered', function(data){
+
+    // prevent users leaving bot playing by himself in the room when they leave
+    // doing this here so it happens as soon as last user leaves
+    // stopping the bot from potentially starting another song
+
+    
+    bot.roomInfo(false, function(data){
+	
+//	console.log(data);		
+	
+	if (data.room.metadata.djcount == 1 && data.room.metadata.current_dj == USERID)
+	{
+	    var audience = 0;
+	    for (var i = 0; i < data.users.length; i++)
+	    {
+		var name = data.users[i].name;
+
+		if (!name.match('Guest') && !name.match(BOTNAME))
+		    audience++;
+	    }
+	    
+	    if (audience == 0)
+	    {
+		console.log('no one is listening anymore, stop DJing');
+		bot.remDj(USERID);
+		bot_dj = 0;
+	    }
+	    
+	    else
+		console.log('someone is still listening');
+	}
+	
+    });
+    
+});
+
 
 bot.on('roomChanged', function(data){
     var real_list = data.room.metadata.listeners -1; 

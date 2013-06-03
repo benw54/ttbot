@@ -127,11 +127,6 @@ bot.on('pmmed', function (data){
 		name = data.users[i].name;
 	}
 	
-	//Respond to "/info" command
-	if (text.match(/^\/info$/))
-	{
-	    pmCMD(name, userid);
-	}
 	
 	//Respond to "/votes" command
 	if (text.match(/^\/votes$/))
@@ -142,7 +137,7 @@ bot.on('pmmed', function (data){
 	}
 	
 	//Respond to "/botup" command
-	if (text.match(/^\/botup$/))
+	else if (text.match(/^\/botup$/))
 	{
 	    console.log(name+ ' wants bot to DJ');
 	    shuffle(function(){
@@ -152,7 +147,7 @@ bot.on('pmmed', function (data){
 	}
 	
 	//Respond to "/botdown" command
-	if (text.match(/^\/botdown$/))
+	else if (text.match(/^\/botdown$/))
 	{
 	    console.log(name+ ' wants bot to stop DJing');
 	    bot.remDj(USERID);
@@ -160,7 +155,7 @@ bot.on('pmmed', function (data){
 	}
 	
 	//Respond to "/skip" command
-	if (text.match(/^\/skip$/))
+	else if (text.match(/^\/skip$/))
 	{
 	    console.log(name+ ' wants bot to skip the song');
 	    if (bot_dj == 1)
@@ -175,13 +170,13 @@ bot.on('pmmed', function (data){
 	}
 	
 	// Respond to "/hello" command
-	if (text.match(/^\/hello$/)) 
+	else if (text.match(/^\/hello$/)) 
 	{
 	    bot.pm('Hey! How are you '+name+'?', userid);
 	}
 	
 	//Respond to "/bop" command
-	if (text.match(/^\/bop$/))
+	else if (text.match(/^\/bop$/))
 	{
 	    if (vote_flag == 1)
 		bot.pm('I already voted', userid);
@@ -198,11 +193,18 @@ bot.on('pmmed', function (data){
 	}	
 
 	// Respond to "/stats" command
-	if (text.match(/^\/stats$/))
+	else if (text.match(/^\/stats$/))
 	{
 	    stats('pm', name, userid);
 	}
-	
+
+	//Respond to "/info" command
+	// or give info for other PMs,
+	// what else would the bot say? :)
+	else if (text.match(/^\/info$/))
+	{
+	    pmCMD(name, userid);
+	}
     });
 });
 
@@ -217,6 +219,9 @@ bot.on('snagged', function (data)
 
 bot.on('newsong', function (data)
 {
+    //debug weird event after last listener deregisters
+    console.log('newsong event');
+
     // new song... vote count starts from zero
     // vote_count isn't needed now we use roomInfo data
     vote_count = 0;
@@ -319,6 +324,8 @@ bot.on('endsong', function (data)
 
 bot.on('update_votes', function (data)
 {
+    // grab the user id of the most recent voter
+    // this might be in data already?
     var info = data.room.metadata.votelog[0][0];
     var real_list = 0;
 
@@ -329,7 +336,8 @@ bot.on('update_votes', function (data)
 		     real_list = data.room.metadata.listeners -1;
 		     vote_count = data.room.metadata.upvotes;
 		     var vratio = vote_count / real_list;
-		     
+
+		     // bot votes if approval is above 40%		     
 		     if (bot_dj == 0 && vote_flag == 0 && vratio > 0.4)
 		     {
 			 bot.speak('Thumbs up!');
@@ -339,18 +347,22 @@ bot.on('update_votes', function (data)
 			 vratio = vote_count / real_list;
 		     }
 
+		     // we do this in informRoom now
+		     /*
 		     for (var i = 0; i < data.users.length; i++)
 		     {
 			 if (data.users[i].userid == info)
 			     var username = data.users[i].name;
 		     }
+		     */
 
 		     informRoom('vote', info);
 
-		     if (bot_dj == 0 && snag_flag == 0 && vote_count > 2 && vratio >= 0.5)
+		     // if bot is not the dj, there are more than 2 upvotes, and approval is over 50%, snag song
+		     if (data.room.metadata.current_song.djname != BOTNAME && snag_flag == 0 && vote_count > 2 && vratio >= 0.5)
 			 {
 			     bot.speak('Everyone seems to like this song, I\'m snagging it');
-			     //doesn't actually snag, only makes the little heart happen
+			     // doesn't actually snag, only makes the little heart happen
 			     bot.snag();
 			     console.log('ratio over half... adding song to queue');
 			     // playlist is pretty big, let's stick the
@@ -376,6 +388,8 @@ bot.on('deregistered', function(data){
     // doing this here so it happens as soon as last user leaves
     // stopping the bot from potentially starting another song
 
+    console.log('deregistered');
+    console.log(data);
     
     bot.roomInfo(false, function(data){
 	
@@ -389,7 +403,10 @@ bot.on('deregistered', function(data){
 		var name = data.users[i].name;
 
 		if (!name.match('Guest') && !name.match(BOTNAME))
-		    audience++;
+		    {
+			console.log(name+ ' still listenening');
+			audience++;
+		    }
 	    }
 	    
 	    if (audience == 0)
@@ -426,7 +443,7 @@ function informRoom(str, userid)
 {
     bot.roomInfo( true, function (data)
 		  {
-		      // should get this by filtering @tt_stats too... later
+		      // should get this by filtering out @tt_stats* too... later
 		      real_list = data.room.metadata.listeners -1;
 		      vote_count = data.room.metadata.upvotes;
 		      var vratio = vote_count / real_list;
@@ -465,7 +482,7 @@ function shuffle(callback)
 {
 
     bot.playlistAll(function(data){
-//	var len = data.list.length;
+	//	var len = data.list.length;
 
 
 	// does the bot remain unresponsive for as long if we only shuffle 1/4 of the playlist?
@@ -558,7 +575,7 @@ function addNewUsers()
 		if (typeof row.num == 'number' && row.num == 0)
 		{
 		    var j = row.qn;
-		    //		console.log('userdb row.num = ' +row.num+ 'for username = ' +data.users[j].name+ '('+data.users[j].userid+ ') and qn = ' +row.qn);
+
 		    console.log('Added ' +data.users[j].name+ ' (' +data.users[j].userid+ ') to user database');
 		    
 		    var newuserdb = uclient.query("INSERT INTO user_info VALUES ('"+data.users[j].userid+"','" +data.users[j].name+ "');");
@@ -566,20 +583,17 @@ function addNewUsers()
 		    newuserdb.on('row', function(row){
 			console.log(row);
 		    });
-		    //	    newuserdb.on('end', function(){
-		    //		uclient.end();
-		    //	    });
+
 		    newuserdb.on('error', function(error){
 			console.log('There was an error: (' +error+ ')');
 			console.log('With userid: ' +data.users[j].userid+ ' name: ' +data.users[j].name+ ' qnum: ' +j);
-			//		uclient.end();
 		    });
 		}
 	    });
 	}
     });
 
-    console.log('Added Unknown users to DB');
+//    console.log('Added Unknown users to DB');
 }
 
 function pmCMD(name, userid)
@@ -593,7 +607,9 @@ function pmCMD(name, userid)
 		    bot.pm('/botup   --> I get up and DJ\n\n', userid, function(){
 			bot.pm('/botdown --> I stop DJing\n\n', userid, function(){
 			    bot.pm('/skip    --> if DJing, I skip the current song\n\n', userid, function(){
-				bot.pm('/info    --> I\'ll pm you a list of commands\n\n', userid);
+				bot.pm('/stats    --> I display some stats\n\n', userid, function(){
+				    bot.pm('/info    --> I\'ll pm you this list of commands\n\n', userid);
+				});
 			    });
 			});
 		    });
@@ -636,8 +652,10 @@ function stats(type, name, userid)
 	    bot.speak('Most Popular Song: ' +row.artist+ ' - ' +row.title+ ' played by ' + row.username+ ' on ' +row.date);
     });
 
+// old way... with average score, it isn't really fair if people don't DJ that often
+// var sdb2 = sclient.query("SELECT username, AVG(upvotes + 2*adds - downvotes) score from user_info, play_info where user_info.userid = play_info.userid GROUP BY user_info.username ORDER BY score DESC LIMIT 1;");
 
-var sdb2 = sclient.query("SELECT username, AVG(upvotes + 2*adds - downvotes) score from user_info, play_info where user_info.userid = play_info.userid GROUP BY user_info.username ORDER BY score DESC LIMIT 1;");
+var sdb2 = sclient.query("SELECT username, SUM(upvotes + 2*adds - downvotes) score from user_info, play_info where user_info.userid = play_info.userid GROUP BY user_info.username ORDER BY score DESC LIMIT 1;");
 
     sdb2.on('error', function(error){
 	console.log('There was a query error... ' +error);

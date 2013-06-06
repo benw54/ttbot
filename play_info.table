@@ -1,0 +1,10 @@
+                Table "public.play_info"
+  Column   |            Type             |   Modifiers   
+-----------+-----------------------------+---------------
+ userid    | text                        | not null
+ songid    | text                        | not null
+ date      | timestamp without time zone | default now()
+ upvotes   | integer                     | 
+ downvotes | integer                     | 
+ adds      | integer                     | 
+

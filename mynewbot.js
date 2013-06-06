@@ -259,7 +259,11 @@ bot.on('newsong', function (data)
 
     songdb.on('row',function(row){
 	if (typeof row.num == 'number' && row.num > 0)
-	    var newsongdb = client.query("UPDATE song_info SET playcount = playcount + 1 where songid = '" +songid+ "';");
+	{
+	    var newsongdb = client.query("UPDATE song_info SET last_played = 'now'::date, playcount = playcount + 1 where songid = '" +songid+ "';");
+	    
+	}
+	
 	else
 	    var newsongdb = client.query("INSERT INTO song_info VALUES ('"+songid+"','" +artist+ "','" +title+ "',default,default);");
 
@@ -599,7 +603,9 @@ function addNewUsers()
 function pmCMD(name, userid)
 {
 
-    //chaining callbacks to pm in correct order
+    // chaining callbacks to pm in correct order
+    // apparently newlines are not supported by chat window :(
+
     bot.pm('These are the commands I understand:\n\n', userid, function(){
 	bot.pm('/hello   --> I say hello to you\n\n', userid, function(){
 	    bot.pm('/votes   --> the vote count for current song\n\n', userid, function(){

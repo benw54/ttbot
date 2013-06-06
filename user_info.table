@@ -1,0 +1,8 @@
+  Table "public.user_info"
+  Column  | Type | Modifiers 
+----------+------+-----------
+ userid   | text | not null
+ username | text | not null
+Indexes:
+    "user_id_unique" UNIQUE CONSTRAINT, btree (userid)
+

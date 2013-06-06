@@ -1,0 +1,11 @@
+                   Table "public.song_info"
+   Column    |  Type   |              Modifiers               
+-------------+---------+--------------------------------------
+ songid      | text    | not null
+ artist      | text    | not null
+ title       | text    | not null
+ last_played | date    | not null default ('now'::text)::date
+ playcount   | integer | not null default 1
+Indexes:
+    "song_id_unique" UNIQUE CONSTRAINT, btree (songid)
+

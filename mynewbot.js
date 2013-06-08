@@ -1,5 +1,6 @@
-var Bot    = require('ttapi');
-var pg     = require('pg');
+var Bot    = require('ttapi');       // turntable api module
+var pg     = require('pg');          // postgres module
+var sync   = require('async'); // module to run asynch calls synchronously :)
 
 var AUTH   = 'dNcValPLtHqLzNkHrsrfsGJb';
 var USERID = '517c27a6eb35c118e362e03e';
@@ -105,6 +106,12 @@ bot.on('speak', function (data)
 
     }
 
+    // Respond to "/lb" (leaderboard) command
+    if (text.match(/^\/lb$/))
+    {
+	leaderboard('room', name, null);
+    }
+
     // Respond to "/stats" command
     if (text.match(/^\/stats$/))
     {
@@ -198,10 +205,16 @@ bot.on('pmmed', function (data){
 	    stats('pm', name, userid);
 	}
 
+	// Respond to "/lb" (leaderboard) command
+	else if (text.match(/^\/lb$/))
+	{
+	    leaderboard('pm', name, userid);
+	}
+
 	//Respond to "/info" command
 	// or give info for other PMs,
 	// what else would the bot say? :)
-	else if (text.match(/^\/info$/))
+	else // if (text.match(/^\/info$/))
 	{
 	    pmCMD(name, userid);
 	}
@@ -259,11 +272,7 @@ bot.on('newsong', function (data)
 
     songdb.on('row',function(row){
 	if (typeof row.num == 'number' && row.num > 0)
-	{
 	    var newsongdb = client.query("UPDATE song_info SET last_played = 'now'::date, playcount = playcount + 1 where songid = '" +songid+ "';");
-	    
-	}
-	
 	else
 	    var newsongdb = client.query("INSERT INTO song_info VALUES ('"+songid+"','" +artist+ "','" +title+ "',default,default);");
 
@@ -370,8 +379,8 @@ bot.on('update_votes', function (data)
 			     bot.snag();
 			     console.log('ratio over half... adding song to queue');
 			     // playlist is pretty big, let's stick the
-			     // new song at index 40 since we shuffle regularly now
-			     bot.playlistAdd(data.room.metadata.current_song._id, 40);
+			     // new song at index 80 since we shuffle regularly now
+			     bot.playlistAdd(data.room.metadata.current_song._id, 80);
 			     add_count++;
 			     snag_flag = 1;
 			 }
@@ -615,13 +624,13 @@ function pmCMD(name, userid)
 			    bot.pm('/skip    --> if DJing, I skip the current song\n\n', userid, function(){
 				bot.pm('/stats    --> I display some stats\n\n', userid, function(){
 				    bot.pm('/info    --> I\'ll pm you this list of commands\n\n', userid);
-				});
-			    });
-			});
-		    });
-		});
-	    });
-	});
+				})
+			    })
+			})
+		    })
+		})
+	    })
+	})
     });
     
     console.log('Pmmed ' +name+ '(' +userid+ ')');    
@@ -685,5 +694,45 @@ var sdb2 = sclient.query("SELECT username, SUM(upvotes + 2*adds - downvotes) sco
 	    bot.pm('Most Played Song: ' +row.artist+ ' - ' +row.title, userid);
 	else
 	    bot.speak('Most Played Song: ' +row.artist+ ' - ' +row.title);
+    });
+}
+
+
+function leaderboard(type, name, userid)
+{
+    console.log('leaderboard function called by ' +name);
+
+    var client = new pg.Client(conString);
+
+    client.connect(function(error) {
+	client.query("SELECT username, SUM(upvotes + 2*adds - downvotes) score from user_info, play_info where user_info.userid = play_info.userid GROUP BY user_info.username ORDER BY score DESC;", function(error, result) {
+
+	    var strs = [];
+	    function iter (item, callback) {
+		if (type.match('pm'))
+		{
+		    bot.pm(item, userid, function (){
+			callback();
+		    });
+		}
+		else
+		{
+		    bot.speak(item, function (){
+			callback();
+		    });
+		}
+		
+	    }
+	    
+	    for (var i = 0; i < result.rows.length; i++)
+		strs.push(result.rows[i].score +' - '+ result.rows[i].username);
+	    
+	    strs.unshift('Here are the current scores: ');
+
+	    // much cleaner with this "sychronous" way, I still don't understand how you're supposed to chain callbacks when you don't know beforehand
+	    // how many times you're going to be calling a function and want to maintain a certain flow... stupid and unnecessarily restrictive
+	    sync.eachSeries(strs, iter, null);
+	    
+	});
     });
 }

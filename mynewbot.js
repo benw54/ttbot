@@ -1,6 +1,6 @@
 var Bot    = require('ttapi');       // turntable api module
 var pg     = require('pg');          // postgres module
-var sync   = require('async'); // module to run asynch calls synchronously :)
+var sync   = require('async');       // module to run asynch calls synchronously :)
 
 var AUTH   = 'dNcValPLtHqLzNkHrsrfsGJb';
 var USERID = '517c27a6eb35c118e362e03e';
@@ -11,13 +11,15 @@ var ROOMID = '4fd1dd4daaa5cd11a1000061';
 var conString = "tcp://walker@localhost:5432/test";
 
 var bot = new Bot(AUTH, USERID, ROOMID);
-//bot.debug = true;
+
 
 var bot_dj = 0;
 var vote_count = 0;
 var add_count = 0;
 var vote_flag = 0;
 var snag_flag = 0;
+var ttstats = 0;
+
 
 bot.on('speak', function (data) 
 {
@@ -346,8 +348,9 @@ bot.on('update_votes', function (data)
     bot.roomInfo(true, function (data)
 		 {
 
-		     real_list = data.room.metadata.listeners -1;
+		     real_list = data.room.metadata.listeners -1 -ttstats;
 		     vote_count = data.room.metadata.upvotes;
+		     var curdj = data.room.metadata.current_song.djname;
 		     var vratio = vote_count / real_list;
 
 		     // bot votes if approval is above 40%		     
@@ -360,19 +363,10 @@ bot.on('update_votes', function (data)
 			 vratio = vote_count / real_list;
 		     }
 
-		     // we do this in informRoom now
-		     /*
-		     for (var i = 0; i < data.users.length; i++)
-		     {
-			 if (data.users[i].userid == info)
-			     var username = data.users[i].name;
-		     }
-		     */
-
 		     informRoom('vote', info);
 
 		     // if bot is not the dj, there are more than 2 upvotes, and approval is over 50%, snag song
-		     if (data.room.metadata.current_song.djname != BOTNAME && snag_flag == 0 && vote_count > 2 && vratio >= 0.5)
+		     if (curdj != BOTNAME && snag_flag == 0 && vote_count > 2 && vratio >= 0.5)
 			 {
 			     bot.speak('Everyone seems to like this song, I\'m snagging it');
 			     // doesn't actually snag, only makes the little heart happen
@@ -380,6 +374,7 @@ bot.on('update_votes', function (data)
 			     console.log('ratio over half... adding song to queue');
 			     // playlist is pretty big, let's stick the
 			     // new song at index 80 since we shuffle regularly now
+			     // hardcoding this number, don't want to do a whole call to playlistAll()
 			     bot.playlistAdd(data.room.metadata.current_song._id, 80);
 			     add_count++;
 			     snag_flag = 1;
@@ -391,6 +386,18 @@ bot.on('update_votes', function (data)
 
 bot.on('registered', function(data){
 
+    // I fully acknowledge that this is absolutely ridiculous
+    // I don't know why it won't give me the array member, it's late, and it works
+    var name = JSON.stringify(data.user).split(',')[1].split(':')[1].split('"')[1];
+
+    // set the ttstats flag if a ttstats bot enters so we can take them out of vote calculations
+    if (name.match(/@ttstats_/))
+	ttstats = 1;
+    else if (name == BOTNAME)
+	;
+    else
+	console.log(name+ ' entered the room');
+    
     // add users (if unknown) to db
     addNewUsers();
 });
@@ -401,8 +408,16 @@ bot.on('deregistered', function(data){
     // doing this here so it happens as soon as last user leaves
     // stopping the bot from potentially starting another song
 
-    console.log('deregistered');
-    console.log(data);
+    // same as above...
+    // I fully acknowledge that this is absolutely ridiculous
+    // I don't know why it won't give me the array member, it's late, and it works
+    var name = JSON.stringify(data.user).split(',')[1].split(':')[1].split('"')[1];
+
+    if (name.match(/@ttstats_/))
+	ttstats = 0;
+
+    else
+	console.log(name+ ' left the room');
     
     bot.roomInfo(false, function(data){
 	
@@ -439,36 +454,26 @@ bot.on('deregistered', function(data){
 
 
 bot.on('roomChanged', function(data){
-    var real_list = data.room.metadata.listeners -1; 
+    // will the bot ever go into another room? I don't think so
+    var real_list = data.room.metadata.listeners -1 -ttstats; 
 
     console.log('Logged Into Room!');
     console.log('Num Listeners: ' +real_list);
-
-
-    // Stupid... bot logs into room and then hears its own
-    // event for 'registered' don't do this here or it happens twice
-    //    addNewUsers();
-    
-    
 });
 
 function informRoom(str, userid)
 {
     bot.roomInfo( true, function (data)
 		  {
-		      // should get this by filtering out @tt_stats* too... later
-		      real_list = data.room.metadata.listeners -1;
+		      real_list = data.room.metadata.listeners -1 -ttstats;
 		      vote_count = data.room.metadata.upvotes;
 		      var vratio = vote_count / real_list;
 
-//		      console.log(data);
 		      for (var i = 0; i < data.users.length; i++)
 		      {
-//			  console.log('data.users[' +i+ '] = ' + data.users[i].userid + ' username = ' + data.users[i].name);
 			  if (data.users[i].userid == userid)
 			  {
 			      var username = data.users[i].name;
-//			      console.log('Found a match ' +username);
 			      break;
 			  }
 
@@ -495,8 +500,6 @@ function shuffle(callback)
 {
 
     bot.playlistAll(function(data){
-	//	var len = data.list.length;
-
 
 	// does the bot remain unresponsive for as long if we only shuffle 1/4 of the playlist?
 	// short answer... no
@@ -537,7 +540,6 @@ function shuffle(callback)
 	    bot.playlistReorder(idx2[i], idx1[i]);
 
 	console.log('Playlist has ' +data.list.length+ ' songs');
-//	callback();
     });
 
 // -- debug --
@@ -639,7 +641,7 @@ function pmCMD(name, userid)
 
 function stats(type, name, userid)
 {
-    console.log('stats function called ' +type+ ' / ' +name+ ' / ' +userid);
+    console.log('stats function called (' +type+ ') by ' +name+ ' - ' +userid);
 
     var sclient = new pg.Client(conString);
 
@@ -667,10 +669,7 @@ function stats(type, name, userid)
 	    bot.speak('Most Popular Song: ' +row.artist+ ' - ' +row.title+ ' played by ' + row.username+ ' on ' +row.date);
     });
 
-// old way... with average score, it isn't really fair if people don't DJ that often
-// var sdb2 = sclient.query("SELECT username, AVG(upvotes + 2*adds - downvotes) score from user_info, play_info where user_info.userid = play_info.userid GROUP BY user_info.username ORDER BY score DESC LIMIT 1;");
-
-var sdb2 = sclient.query("SELECT username, SUM(upvotes + 2*adds - downvotes) score from user_info, play_info where user_info.userid = play_info.userid GROUP BY user_info.username ORDER BY score DESC LIMIT 1;");
+    var sdb2 = sclient.query("SELECT username, SUM(upvotes + 2*adds - downvotes) score from user_info, play_info where user_info.userid = play_info.userid GROUP BY user_info.username ORDER BY score DESC LIMIT 1;");
 
     sdb2.on('error', function(error){
 	console.log('There was a query error... ' +error);

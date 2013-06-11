@@ -20,4 +20,4 @@ pg (module for accessing a Postgres Database)
 
 async (module to make asynchronous calls synchronously)
 
-Install these via npm install <module name> (as root)
+Install these via npm install \<module name\> (as root)

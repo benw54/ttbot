@@ -15,7 +15,9 @@ This script requires the installation of node.js
 It also requires node modules: 
 
 ttapi (The Turntable.fm API module)
+
 pg (module for accessing a Postgres Database)
+
 async (module to make asynchronous calls synchronously)
 
 Install these via npm install <module name> (as root)

@@ -12,13 +12,14 @@ var conString = "tcp://walker@localhost:5432/test";
 
 var bot = new Bot(AUTH, USERID, ROOMID);
 
-
+// Globals
 var bot_dj = 0;
 var vote_count = 0;
 var add_count = 0;
 var vote_flag = 0;
 var snag_flag = 0;
 var ttstats = 0;
+var noadd = 0;
 
 
 bot.on('speak', function (data) 
@@ -213,6 +214,16 @@ bot.on('pmmed', function (data){
 	    leaderboard('pm', name, userid);
 	}
 
+	// ADMIN COMMANDS /////////////////////////////////////
+	
+	// don't add the current song
+	else if (text.match(/^\/noadd$/) && name.match('benw54'))
+	{
+	    noadd = 1;
+	    bot.pm('OK, I won\'t add this song', userid);
+	}
+	///////////////////////////////////////////////////////
+
 	//Respond to "/info" command
 	// or give info for other PMs,
 	// what else would the bot say? :)
@@ -242,6 +253,7 @@ bot.on('newsong', function (data)
     vote_count = 0;
     vote_flag = 0;
     snag_flag = 0;
+    noadd = 0;
     songid = data.room.metadata.current_song._id;
 
     //allowing for single quotes in strings
@@ -333,7 +345,7 @@ bot.on('endsong', function (data)
     });
 
     add_count = 0;
-
+    
 
 });
 
@@ -369,13 +381,24 @@ bot.on('update_votes', function (data)
 		     if (curdj != BOTNAME && snag_flag == 0 && vote_count > 2 && vratio >= 0.5)
 			 {
 			     bot.speak('Everyone seems to like this song, I\'m snagging it');
-			     // doesn't actually snag, only makes the little heart happen
+
+			     // doesn't actually snag, only makes the little heart animation happen
 			     bot.snag();
-			     console.log('ratio over half... adding song to queue');
-			     // playlist is pretty big, let's stick the
-			     // new song at index 80 since we shuffle regularly now
-			     // hardcoding this number, don't want to do a whole call to playlistAll()
-			     bot.playlistAdd(data.room.metadata.current_song._id, 80);
+
+			     // check noadd flag, leaving the heart animation as a little white lie, so
+			     // noone's feelings get hurt :)
+			     if (noadd == 0)
+			     {
+				 console.log('ratio over half... adding song to queue');
+				 // playlist is pretty big, let's stick the
+				 // new song at index 80 since we shuffle regularly now
+				 // hardcoding this number, don't want to do a whole call to playlistAll()				 
+				 bot.playlistAdd(data.room.metadata.current_song._id, 80);
+			     }
+			     else
+				 console.log('ratio over half, but noadd set');
+
+
 			     add_count++;
 			     snag_flag = 1;
 			 }
@@ -386,16 +409,14 @@ bot.on('update_votes', function (data)
 
 bot.on('registered', function(data){
 
-    // I fully acknowledge that this is absolutely ridiculous
-    // I don't know why it won't give me the array member, it's late, and it works
-    var name = JSON.stringify(data.user).split(',')[1].split(':')[1].split('"')[1];
+    var name = data.user[0].name;
 
-    // set the ttstats flag if a ttstats bot enters so we can take them out of vote calculations
-    if (name.match(/@ttstats_/))
-	ttstats = 1;
-    else if (name == BOTNAME)
-	;
-    else
+    // @ttstats bot just entered, factor them into vote calculations
+    // we do this as part of addNewUsers() now, just make sure it works
+//    if (name.match(/@ttstats_/))
+//	ttstats = 1;
+
+    if (name != BOTNAME)
 	console.log(name+ ' entered the room');
     
     // add users (if unknown) to db
@@ -404,20 +425,21 @@ bot.on('registered', function(data){
 
 bot.on('deregistered', function(data){
 
+    var name = data.user[0].name;
+
     // prevent users leaving bot playing by himself in the room when they leave
     // doing this here so it happens as soon as last user leaves
     // stopping the bot from potentially starting another song
 
-    // same as above...
-    // I fully acknowledge that this is absolutely ridiculous
-    // I don't know why it won't give me the array member, it's late, and it works
-    var name = JSON.stringify(data.user).split(',')[1].split(':')[1].split('"')[1];
 
+    // @ttstats bot just left, take them out of vote calculations
     if (name.match(/@ttstats_/))
+    {
 	ttstats = 0;
+	console.log('cleared ttstats flag');
+    }
 
-    else
-	console.log(name+ ' left the room');
+    console.log(name+ ' left the room');
     
     bot.roomInfo(false, function(data){
 	
@@ -454,7 +476,7 @@ bot.on('deregistered', function(data){
 
 
 bot.on('roomChanged', function(data){
-    // will the bot ever go into another room? I don't think so
+    // will the bot ever go into another room? I don't think so... not without a quiet mode anyway
     var real_list = data.room.metadata.listeners -1 -ttstats; 
 
     console.log('Logged Into Room!');
@@ -481,9 +503,9 @@ function informRoom(str, userid)
 		      if (str == 'vote')
 		      {
 			  if (userid == null || userid == undefined || username == undefined)
-			      console.log('Vote... Downvote :(' + ' Ratio = '+vratio);
+			      console.log('Vote... Downvote :(' + ' Ratio = '+vratio.toFixed(2));
 			  else
-			      console.log('Vote... '+userid+ ' (' +username+ ')' + ' Ratio = '+vratio);
+			      console.log('Vote... '+userid+ ' (' +username+ ')' + ' Ratio = ' +vratio.toFixed(2));
 		      }
 		      
 		      if (str == 'add')
@@ -555,6 +577,10 @@ function addNewUsers()
 {
 
     bot.roomInfo(false, function(data){
+
+//	console.log(data.users);
+//	console.log('number of users: ' +data.users.length);
+
 	//connect to database to add unknown users
 	var uclient = new pg.Client(conString);
 	
@@ -574,22 +600,33 @@ function addNewUsers()
 	{
 	    var userid = data.users[i].userid;
 	    var username = data.users[i].name;
-	    
+
+	    // this catches the @ttstats bot if it's already in the room when we enter as well as when it enters
+	    if (data.users[i].name.match(/@ttstats_/) && ttstats == 0)
+	    {
+		ttstats = 1;
+		console.log('set ttstats flag');
+	    }
+
 	    
 	    // Stupid freaking non-blocking queries... tagging query result so when row event occurs, we have a way of
 	    // telling which query result we are getting. There must be a better way? An array of query objects maybe?
 	    // Documentation mentions Result object... look into that more
 	    
-	    var userdb = uclient.query("SELECT count(*) num, '" +i+ "' qn from user_info WHERE userid = '" +userid+ "';");
+	    var userdb = uclient.query("SELECT count(*) num, (SELECT username from user_info where userid = '" +userid+ "'), '" +i+ "' qn from user_info WHERE userid = '" +userid+ "';");
+//	    console.log('db query: ' +username+ ' - ' +userid+ ' i: ' +i);
 	    
 	    userdb.on('error', function(error){
 		console.log('There was an error: (' +error+ ')');
 	    });
 	    
 	    userdb.on('row',function(row){
-		if (typeof row.num == 'number' && row.num == 0)
+		var j = row.qn;
+
+		// we always return a row, if query returns 0 for the count, add user to db
+		if (row.num == 0)
 		{
-		    var j = row.qn;
+
 
 		    console.log('Added ' +data.users[j].name+ ' (' +data.users[j].userid+ ') to user database');
 		    
@@ -601,9 +638,27 @@ function addNewUsers()
 
 		    newuserdb.on('error', function(error){
 			console.log('There was an error: (' +error+ ')');
-			console.log('With userid: ' +data.users[j].userid+ ' name: ' +data.users[j].name+ ' qnum: ' +j);
 		    });
 		}
+
+		// allowing for users who have changed their name since we met them (Usually when we meet a "Guest" and then they register)
+		else if (data.users[j].name != row.username)
+		{
+		    console.log('Updated ' +data.users[j].name+ ' (' +data.users[j].userid+ ') in user database');
+		    
+		    var newuserdb = uclient.query("UPDATE user_info SET username = '"+data.users[j].name+"' where userid = '" +data.users[j].userid+ "';");
+		    
+		    newuserdb.on('row', function(row){
+			console.log(row);
+		    });
+		    
+		    newuserdb.on('error', function(error){
+			console.log('There was an error: (' +error+ ')');
+			console.log('With userid: ' +data.users[j].userid+ ' name: ' +data.users[j].name+ ' qnum: ' +j);
+		    });
+		    
+		}
+		
 	    });
 	}
     });
@@ -704,7 +759,7 @@ function leaderboard(type, name, userid)
     var client = new pg.Client(conString);
 
     client.connect(function(error) {
-	client.query("SELECT username, SUM(upvotes + 2*adds - downvotes) score from user_info, play_info where user_info.userid = play_info.userid GROUP BY user_info.username ORDER BY score DESC;", function(error, result) {
+	client.query("SELECT username, SUM(upvotes + 2*adds - downvotes) score from user_info INNER JOIN play_info USING(userid) GROUP BY user_info.username ORDER BY score DESC;", function(error, result) {
 
 	    var strs = [];
 	    function iter (item, callback) {

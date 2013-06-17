@@ -214,7 +214,7 @@ bot.on('pmmed', function (data){
 	    leaderboard('pm', name, userid);
 	}
 
-	// ADMIN COMMANDS /////////////////////////////////////
+////////// ADMIN COMMANDS /////////////////////////////////////
 	
 	// don't add the current song
 	else if (text.match(/^\/noadd$/) && name.match('benw54'))
@@ -222,10 +222,11 @@ bot.on('pmmed', function (data){
 	    noadd = 1;
 	    bot.pm('OK, I won\'t add this song', userid);
 	}
-	///////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////
 
 	//Respond to "/info" command
-	// or give info for other PMs,
+	// or give info for any other PMs,
 	// what else would the bot say? :)
 	else // if (text.match(/^\/info$/))
 	{
@@ -417,7 +418,7 @@ bot.on('registered', function(data){
 //	ttstats = 1;
 
     if (name != BOTNAME)
-	console.log(name+ ' entered the room');
+	console.log(name+ ' entered the room ' +timeNow());
     
     // add users (if unknown) to db
     addNewUsers();
@@ -439,7 +440,7 @@ bot.on('deregistered', function(data){
 	console.log('cleared ttstats flag');
     }
 
-    console.log(name+ ' left the room');
+    console.log(name+ '    left the room ' +timeNow());
     
     bot.roomInfo(false, function(data){
 	
@@ -789,4 +790,17 @@ function leaderboard(type, name, userid)
 	    
 	});
     });
+}
+
+function timeNow()
+{
+    var now = new Date();
+    var hours = now.getHours()%12;
+
+    if (hours == 0)
+	hours = 12;
+
+    var timestring = hours+ ':' +now.getMinutes();
+
+    return(timestring);
 }

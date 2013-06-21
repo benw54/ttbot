@@ -1,4 +1,6 @@
 var Bot    = require('ttapi');       // turntable api module
+var http   = require('http');        // http module
+var qs     = require('querystring'); // querystring module
 var pg     = require('pg');          // postgres module
 var sync   = require('async');       // module to run asynch calls synchronously :)
 
@@ -115,6 +117,37 @@ bot.on('speak', function (data)
 	leaderboard('room', name, null);
     }
 
+    // Respond to Admin commands
+
+    if (name.match('benw54') || name.match('Farmer Maggie') || name.match('Safarry') || name.match('lucasmo'))
+    {
+
+	// Respond to mute / unmute commands
+	if (text.match(/^\/(mute|unmute)$/))
+	{
+	    volOnOff(text);
+	}
+	
+	// Respond to command to change vol up or down
+	else if (text.match(/^\/vol(\+|\-)$/)  && 
+	    (name.match('benw54') || name.match('Farmer Maggie') || name.match('Safarry') || name.match('lucasmo')))
+	{
+	    volRelative(text, null);
+	}
+
+	// Make volume very loud
+	else if (text.match(/^\/bump this shit$/))
+	    {
+		volRelative('80', null);
+	    }
+
+	else if (text.match(/^\/simma down now$/))
+	    {
+		volRelative('20', null);
+	    }
+
+    }
+   
     // Respond to "/stats" command
     if (text.match(/^\/stats$/))
     {
@@ -215,12 +248,54 @@ bot.on('pmmed', function (data){
 	}
 
 ////////// ADMIN COMMANDS /////////////////////////////////////
+
+	// TBD: store user rights in db and query for isadmin instead of hardcoding usernames
 	
 	// don't add the current song
 	else if (text.match(/^\/noadd$/) && name.match('benw54'))
 	{
 	    noadd = 1;
 	    bot.pm('OK, I won\'t add this song', userid);
+	}
+
+	// commands to control voltron volume
+	else if (text.match(/^\/(unmute|mute)$/) && 
+		 (name.match('benw54') || name.match('Farmer Maggie') || name.match('Safarry') || name.match('lucasmo')))
+	{
+	    volOnOff(text);
+	}
+
+	// request voltron's current volume
+	else if (text.match(/^\/vol\?$/) && 
+		 (name.match('benw54') || name.match('Farmer Maggie') || name.match('Safarry') || name.match('lucasmo')))
+	{
+	    var options = {
+		host: 'voltron',
+		port: 80,
+		path: '/internal/audioControl/'
+	    };
+	    
+	    var req = http.request(options, function (resp){
+		resp.setEncoding('utf8');
+		resp.on('data', function(chunk) {
+		    var str = chunk.slice(chunk.search(/\<.*thick.*\>/),chunk.search('thick'));
+		    var str2 = str.slice(str.search('value'), str.search('style'));
+		    var str3 = str2.slice(str2.search('\"')+1, str2.search('\%'));
+		    
+		    bot.pm('Volume: ' +str3+ '%', userid);
+		});
+		resp.on('error', function (error) {
+		    console.log('Got an error ' +error);
+		});
+	    });
+	    
+	    req.end();
+	}
+
+	else if (text.match(/^\/vol(\+|\-)$/) && 
+		 (name.match('benw54') || name.match('Farmer Maggie') || name.match('Safarry') || name.match('lucasmo')))
+	{
+	    volRelative(text, userid);
 	}
 
 ///////////////////////////////////////////////////////////////
@@ -246,8 +321,8 @@ bot.on('snagged', function (data)
 
 bot.on('newsong', function (data)
 {
-    //debug weird event after last listener deregisters
-    console.log('newsong event');
+    //debug weird event after last listener deregisters... only saw it happen once... check later
+    //    console.log('newsong event');
 
     // new song... vote count starts from zero
     // vote_count isn't needed now we use roomInfo data
@@ -265,46 +340,7 @@ bot.on('newsong', function (data)
 
     console.log('\nNew Song... ' +songid+ " (" +artist+ " - " +title+ ")");
 
-//  connect to database for song_info
-
-    var client = new pg.Client(conString);
-    client.connect();
-
-    client.on('error', function(error){
-	console.log('There was an error: (' +error+')');
-	client.end();
-    });
-
-    client.on('end', function(){
-	client.end();
-    });
-
-    var songdb = client.query("SELECT count(*) num from song_info WHERE songid = '" +songid+ "';");
-
-    songdb.on('error', function(error){
-	console.log('There was an error: (' +error+ ')');
-    });
-
-    songdb.on('row',function(row){
-	if (typeof row.num == 'number' && row.num > 0)
-	    var newsongdb = client.query("UPDATE song_info SET last_played = 'now'::date, playcount = playcount + 1 where songid = '" +songid+ "';");
-	else
-	    var newsongdb = client.query("INSERT INTO song_info VALUES ('"+songid+"','" +artist+ "','" +title+ "',default,default);");
-
-	newsongdb.on('row', function(row){
-	    console.log(row);
-	});
-	newsongdb.on('end', function(){
-	    client.end();
-	});
-	newsongdb.on('error', function(error){
-	    console.log('There was an error: (' +error+ ')');
-	    client.end();
-	});
-
-    });
-
-
+    addSongToDB(songid, artist, title);
 });
 
 bot.on('endsong', function (data)
@@ -316,6 +352,13 @@ bot.on('endsong', function (data)
     var upvotes = data.room.metadata.upvotes;
     var downvotes = data.room.metadata.downvotes;
 
+    var songartist = data.room.metadata.current_song.metadata.artist;
+    var songtitle = data.room.metadata.current_song.metadata.song;
+
+
+    bot.speak(songartist+ ' - ' +songtitle+ ' --> :thumbsup: ' +upvotes+ ' :thumbsdown: ' +downvotes+ ' :heart: ' +add_count);
+
+    //    console.log(songartist+ ' - ' +songtitle);
     console.log('Song ended: ' +songid+ ' - ' +username+ '(' +userid+ ') Up: ' +upvotes+ ' Down: ' +downvotes+ ' Adds: ' +add_count);
 
 // connect to database for play_info
@@ -695,6 +738,59 @@ function pmCMD(name, userid)
 }
 
 
+function addSongToDB(songid, artist, title)
+{
+    //  connect to database for song_info
+    
+    var client = new pg.Client(conString);
+    client.connect();
+    
+    client.on('error', function(error){
+	console.log('There was an error: (' +error+')');
+	client.end();
+    });
+
+    client.on('end', function(){
+	client.end();
+    });
+    
+    var songdb = client.query("SELECT count(*) num from song_info WHERE songid = '" +songid+ "';");
+    
+    songdb.on('error', function(error){
+	console.log('There was an error: (' +error+ ')');
+    });
+    
+    songdb.on('row',function(row){
+	if (typeof row.num == 'number' && row.num > 0)
+	{
+	    var newsongdb = client.query("UPDATE song_info SET last_played = 'now'::date, playcount = playcount + 1 where songid = '" +songid+ "';");
+
+	    var lastdb = client.query("SELECT username, to_char(date, 'MM-DD-YY') lastdate FROM play_info INNER JOIN user_info USING (userid) where songid = '" +songid+ "' ORDER BY date DESC LIMIT 1;");
+	    lastdb.on('row', function(row){
+		bot.speak('Last heard ' +artist+ ' - ' +title+ ' from ' +row.username+ ' on ' +row.lastdate);
+	    });
+	    lastdb.on('error', function(error){
+		console.log('There was an error: (' +error+ ')');
+		client.end();
+	    });
+	}
+	else
+	    var newsongdb = client.query("INSERT INTO song_info VALUES ('"+songid+"','" +artist+ "','" +title+ "',default,default);");
+
+
+//	newsongdb.on('end', function(){
+//	    client.end();
+//	});
+
+	newsongdb.on('error', function(error){
+	    console.log('There was an error: (' +error+ ')');
+	    client.end();
+	});
+	
+    });
+}
+
+
 function stats(type, name, userid)
 {
     console.log('stats function called (' +type+ ') by ' +name+ ' - ' +userid);
@@ -780,8 +876,12 @@ function leaderboard(type, name, userid)
 	    }
 	    
 	    for (var i = 0; i < result.rows.length; i++)
-		strs.push(result.rows[i].score +' - '+ result.rows[i].username);
-	    
+	    {
+		// if user hasn't scored any points, exclude them
+		if (result.rows[i].score > 0)
+		    strs.push(result.rows[i].score +' - '+ result.rows[i].username);
+	    }
+
 	    strs.unshift('Here are the current scores: ');
 
 	    // much cleaner with this "sychronous" way, I still don't understand how you're supposed to chain callbacks when you don't know beforehand
@@ -796,11 +896,141 @@ function timeNow()
 {
     var now = new Date();
     var hours = now.getHours()%12;
+    var minutes = now.getMinutes();
+    var meridian = '';
+
+    if (now.getHours() >= 12)
+	meridian = 'pm';
+    else
+	meridian = 'am';
 
     if (hours == 0)
 	hours = 12;
 
-    var timestring = hours+ ':' +now.getMinutes();
+    if (hours < 10)
+	hours = ' ' +hours;
+
+    if (minutes < 10)
+	minutes = '0' +minutes;
+
+    var timestring = hours+ ':' +minutes +meridian;
 
     return(timestring);
+}
+
+function volOnOff(toggle)
+{
+
+    var timenow = new Date().getTime();
+    if (toggle.match(/\/mute/))
+	var post_data = qs.stringify({ muted: 'Silence', '_': timenow });
+    else if (toggle.match(/\/unmute/))
+	var post_data = qs.stringify({ muted: 'Music plz', '_': timenow });
+    
+    var options = {
+	host: 'voltron',
+	port: 80,
+	path: '/internal/audioControl/',
+	method: 'POST',
+	headers: {
+	    'Content-Type': 'application/x-www-form-urlencoded',
+	    'Content-Length': post_data.length
+	}
+    };
+    
+    
+    var req = http.request(options, function (resp){
+	resp.setEncoding('utf8');
+	
+	resp.on('data', function (chunk){
+	    console.log('response = |' +chunk+ '|');
+	});
+    });
+    
+    req.on("error", function(e){
+	console.log('Got an error: ' +e.message);
+    });
+    
+    req.write(post_data+ '\n');
+    req.end();
+    
+}
+
+function volRelative(dir, userid)
+{
+    var options = {
+	host: 'voltron',
+	port: 80,
+	path: '/internal/audioControl/'
+    };
+    
+    var req = http.request(options, function (resp){
+	resp.setEncoding('utf8');
+	resp.on('data', function(chunk) {
+	    var str = chunk.slice(chunk.search(/\<.*thick.*\>/),chunk.search('thick'));
+	    var str2 = str.slice(str.search('value'), str.search('style'));
+	    var str3 = str2.slice(str2.search('\"')+1, str2.search('\%'));
+	    
+	    var timenow = new Date().getTime();
+	    if (dir.match(/\/vol\+/))
+	    {
+		var newvol = parseInt(str3) + 10;
+		if (newvol > 90)
+		    newvol = 90;
+	    }
+	    else if (dir.match(/\/vol\-/))
+	    {
+		var newvol = parseInt(str3) - 10;
+		if (newvol < 0)
+		    newvol = 0;
+	    }
+
+	    // otherwise, we are being lazy and using dir to pass in a value
+	    else
+		newvol = parseInt(dir);
+
+	    if (userid == null)
+		bot.speak('Changed Volume from ' +str3+ '% to ' +newvol+ '%', userid);
+	    else
+		bot.pm('Changed Volume from ' +str3+ '% to ' +newvol+ '%', userid);
+
+	    var post_data = qs.stringify({ volume: newvol + '%', '_': timenow });
+
+	    var options = {
+		host: 'voltron',
+		port: 80,
+		path: '/internal/audioControl/',
+		method: 'POST',
+		headers: {
+		    'Content-Type': 'application/x-www-form-urlencoded',
+		    'Content-Length': post_data.length
+		}
+	    };
+    
+    
+	    var req2 = http.request(options, function (resp){
+		resp.setEncoding('utf8');
+		
+		resp.on('data', function (chunk){
+		    console.log('response = |' +chunk+ '|');
+		});
+	    });
+	    
+	    req2.on("error", function(e){
+		console.log('Got an error: ' +e.message);
+	    });
+	    
+	    req2.write(post_data+ '\n');
+	    req2.end();
+	    
+
+
+
+	});
+	resp.on('error', function (error) {
+	    console.log('Got an error ' +error);
+	});
+    });
+    
+    req.end();
 }

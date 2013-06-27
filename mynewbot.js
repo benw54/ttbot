@@ -371,20 +371,12 @@ bot.on('endsong', function (data)
 	pclient.end();
     });
 
-    pclient.on('end', function(){
-	pclient.end();
-    });
+    var playdb = pclient.query("INSERT INTO play_info VALUES('"+userid+"','"+songid+"',default," +upvotes+ "," +downvotes+ "," +add_count+");", function(error){
 
-    var playdb = pclient.query("INSERT INTO play_info VALUES('"+userid+"','"+songid+"',default," +upvotes+ "," +downvotes+ "," +add_count+");");
+	if (error != null)
+	    console.log('There was an error from playdb query: (' +error+ ')');
 
-    playdb.on('row', function(row){
-	console.log(row);
-    });
-    playdb.on('end', function(){
-	pclient.end();
-    });
-    playdb.on('error', function(error){
-	console.log('There was an error from playdb: (' +error+ ')');
+	// no row is returned from this query, so using callback style to kill pclient
 	pclient.end();
     });
 
@@ -631,11 +623,7 @@ function addNewUsers()
 	uclient.connect();
 	
 	uclient.on('error', function(error){
-	    console.log('There was an error: (' +error+')');
-	    uclient.end();
-	});
-	
-	uclient.on('end', function(){
+	    console.log('There was an error from uclient: (' +error+')');
 	    uclient.end();
 	});
 	
@@ -661,53 +649,69 @@ function addNewUsers()
 //	    console.log('db query: ' +username+ ' - ' +userid+ ' i: ' +i);
 	    
 	    userdb.on('error', function(error){
-		console.log('There was an error: (' +error+ ')');
+		console.log('There was an error from userdb: (' +error+ ')');
 	    });
 	    
+
 	    userdb.on('row',function(row){
 		var j = row.qn;
 
 		// we always return a row, if query returns 0 for the count, add user to db
 		if (row.num == 0)
 		{
-
-
+		    var uclient2 = new pg.Client(conString);
+		    
+		    uclient2.connect();
+		    
+		    uclient2.on('error', function(error){
+			console.log('There was an error from uclient: (' +error+')');
+			uclient2.end();
+		    });
+		    
 		    console.log('Added ' +data.users[j].name+ ' (' +data.users[j].userid+ ') to user database');
 		    
-		    var newuserdb = uclient.query("INSERT INTO user_info VALUES ('"+data.users[j].userid+"','" +data.users[j].name+ "');");
-		    
-		    newuserdb.on('row', function(row){
-			console.log(row);
-		    });
+		    var newuserdb = uclient2.query("INSERT INTO user_info VALUES ('"+data.users[j].userid+"','" +data.users[j].name+ "');", function(error){
 
-		    newuserdb.on('error', function(error){
-			console.log('There was an error: (' +error+ ')');
+			if (error != null)
+			    console.log('There was an error from newuserdb: (' +error+ ')');
+
+			uclient2.end();
 		    });
 		}
 
 		// allowing for users who have changed their name since we met them (Usually when we meet a "Guest" and then they register)
 		else if (data.users[j].name != row.username)
 		{
+		    var uclient2 = new pg.Client(conString);
+	
+		    uclient2.connect();
+		    
+		    uclient2.on('error', function(error){
+			console.log('There was an error from uclient: (' +error+')');
+			uclient2.end();
+		    });
+
 		    console.log('Updated ' +data.users[j].name+ ' (' +data.users[j].userid+ ') in user database');
 		    
-		    var newuserdb = uclient.query("UPDATE user_info SET username = '"+data.users[j].name+"' where userid = '" +data.users[j].userid+ "';");
-		    
-		    newuserdb.on('row', function(row){
-			console.log(row);
-		    });
-		    
-		    newuserdb.on('error', function(error){
-			console.log('There was an error: (' +error+ ')');
-			console.log('With userid: ' +data.users[j].userid+ ' name: ' +data.users[j].name+ ' qnum: ' +j);
+		    var newuserdb = uclient2.query("UPDATE user_info SET username = '"+data.users[j].name+"' where userid = '" +data.users[j].userid+ "';", function(error){
+			
+			if(error != null)
+			{
+			    console.log('There was an error from newuserdb: (' +error+ ')');
+			    console.log('With userid: ' +data.users[j].userid+ ' name: ' +data.users[j].name+ ' qnum: ' +j);
+			}
+			
+			uclient2.end();
 		    });
 		    
 		}
 		
 	    });
 	}
+
     });
 
-//    console.log('Added Unknown users to DB');
+
 }
 
 function pmCMD(name, userid)
@@ -746,18 +750,14 @@ function addSongToDB(songid, artist, title)
     client.connect();
     
     client.on('error', function(error){
-	console.log('There was an error: (' +error+')');
+	console.log('There was an error from client in addSongToDB: (' +error+')');
 	client.end();
     });
 
-    client.on('end', function(){
-	client.end();
-    });
-    
     var songdb = client.query("SELECT count(*) num from song_info WHERE songid = '" +songid+ "';");
     
     songdb.on('error', function(error){
-	console.log('There was an error: (' +error+ ')');
+	console.log('There was an error from songdb: (' +error+ ')');
     });
     
     songdb.on('row',function(row){
@@ -765,25 +765,33 @@ function addSongToDB(songid, artist, title)
 	{
 	    var newsongdb = client.query("UPDATE song_info SET last_played = 'now'::date, playcount = playcount + 1 where songid = '" +songid+ "';");
 
-	    var lastdb = client.query("SELECT username, to_char(date, 'MM-DD-YY') lastdate FROM play_info INNER JOIN user_info USING (userid) where songid = '" +songid+ "' ORDER BY date DESC LIMIT 1;");
+	    // just creating new client for query... tired of them hanging around idle
+	    var lclient = new pg.Client(conString);
+	    lclient.connect();
+	    var lastdb = lclient.query("SELECT username, to_char(date, 'MM-DD-YY') lastdate FROM play_info INNER JOIN user_info USING (userid) where songid = '" +songid+ "' ORDER BY date DESC LIMIT 1;");
 	    lastdb.on('row', function(row){
-		bot.speak('Last heard ' +artist+ ' - ' +title+ ' from ' +row.username+ ' on ' +row.lastdate);
+		bot.speak(':arrow_forward: Last heard ' +artist+ ' - ' +title+ ' from ' +row.username+ ' on ' +row.lastdate);
 	    });
 	    lastdb.on('error', function(error){
-		console.log('There was an error: (' +error+ ')');
-		client.end();
+		console.log('There was an error from lastdb: (' +error+ ')');
+		lclient.end();
 	    });
+	    lastdb.on('end', function(){
+		lclient.end();
+	    });
+	    
+
 	}
 	else
 	    var newsongdb = client.query("INSERT INTO song_info VALUES ('"+songid+"','" +artist+ "','" +title+ "',default,default);");
 
 
-//	newsongdb.on('end', function(){
-//	    client.end();
-//	});
+	newsongdb.on('end', function(){
+	    client.end();
+	});
 
 	newsongdb.on('error', function(error){
-	    console.log('There was an error: (' +error+ ')');
+	    console.log('There was an error from newsongdb: (' +error+ ')');
 	    client.end();
 	});
 	
@@ -795,20 +803,14 @@ function stats(type, name, userid)
 {
     console.log('stats function called (' +type+ ') by ' +name+ ' - ' +userid);
 
-    var sclient = new pg.Client(conString);
+    var sclient1 = new pg.Client(conString);
+    sclient1.connect();
 
-    sclient.connect();
-
-    sclient.on('error', function(error){
-	console.log('There was an error... ' +error);
+    sclient1.on('error', function(error){
+	console.log('There was an error from sclient: ' +error);
     });
 
-    sclient.on('end', function(){
-	sclient.end();
-    });
-
-
-    var sdb1 = sclient.query("SELECT artist, title, username, to_char(date, 'MM-DD-YY') date from play_info INNER JOIN user_info USING (userid) INNER JOIN song_info USING (songid) where upvotes = (SELECT MAX(upvotes) from play_info) ORDER BY adds DESC LIMIT 1;");
+    var sdb1 = sclient1.query("SELECT artist, title, username, to_char(date, 'MM-DD-YY') date from play_info INNER JOIN user_info USING (userid) INNER JOIN song_info USING (songid) where upvotes = (SELECT MAX(upvotes) from play_info) ORDER BY adds DESC LIMIT 1;");
 
     sdb1.on('error', function(error){
 	console.log('There was a query error... ' +error);
@@ -821,7 +823,17 @@ function stats(type, name, userid)
 	    bot.speak('Most Popular Song: ' +row.artist+ ' - ' +row.title+ ' played by ' + row.username+ ' on ' +row.date);
     });
 
-    var sdb2 = sclient.query("SELECT username, SUM(upvotes + 2*adds - downvotes) score from user_info, play_info where user_info.userid = play_info.userid GROUP BY user_info.username ORDER BY score DESC LIMIT 1;");
+    sdb1.on('end', function(){
+	sclient1.end();
+    });
+
+    var sclient2 = new pg.Client(conString);
+    sclient2.connect();
+
+    sclient2.on('error', function(error){
+	console.log('There was an error from sclient: ' +error);
+    });
+    var sdb2 = sclient2.query("SELECT username, SUM(upvotes + 2*adds - downvotes) score from user_info, play_info where user_info.userid = play_info.userid GROUP BY user_info.username ORDER BY score DESC LIMIT 1;");
 
     sdb2.on('error', function(error){
 	console.log('There was a query error... ' +error);
@@ -834,7 +846,19 @@ function stats(type, name, userid)
 	    bot.speak('Most Popular DJ: ' +row.username);
     });
 
-    var sdb3 = sclient.query('SELECT artist, title, count(play_info.songid) plays from song_info, play_info WHERE song_info.songid = play_info.songid GROUP BY song_info.artist, song_info.title ORDER BY plays DESC LIMIT 1;');
+    sdb2.on('end', function(){
+	sclient2.end();
+    });
+
+
+    var sclient3 = new pg.Client(conString);
+    sclient3.connect();
+
+    sclient3.on('error', function(error){
+	console.log('There was an error from sclient: ' +error);
+    });
+
+    var sdb3 = sclient3.query('SELECT artist, title, count(play_info.songid) plays from song_info, play_info WHERE song_info.songid = play_info.songid GROUP BY song_info.artist, song_info.title ORDER BY plays DESC LIMIT 1;');
 
     sdb3.on('error', function(error){
 	console.log('There was a query error... ' +error);
@@ -845,6 +869,10 @@ function stats(type, name, userid)
 	    bot.pm('Most Played Song: ' +row.artist+ ' - ' +row.title, userid);
 	else
 	    bot.speak('Most Played Song: ' +row.artist+ ' - ' +row.title);
+    });
+
+    sdb3.on('end', function(){
+	sclient3.end();
     });
 }
 
@@ -857,6 +885,8 @@ function leaderboard(type, name, userid)
 
     client.connect(function(error) {
 	client.query("SELECT username, SUM(upvotes + 2*adds - downvotes) score from user_info INNER JOIN play_info USING(userid) GROUP BY user_info.username ORDER BY score DESC;", function(error, result) {
+	    if (error != null)
+		console.log('There was an error in the leaderboard function: ' +error);
 
 	    var strs = [];
 	    function iter (item, callback) {

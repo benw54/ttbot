@@ -617,21 +617,22 @@ function addNewUsers()
 //	console.log(data.users);
 //	console.log('number of users: ' +data.users.length);
 
-	//connect to database to add unknown users
-	var uclient = new pg.Client(conString);
-	
-	uclient.connect();
-	
-	uclient.on('error', function(error){
-	    console.log('There was an error from uclient: (' +error+')');
-	    uclient.end();
-	});
-	
 	
 	for (var i = 0 ; i < data.users.length; i++)
 	{
 	    var userid = data.users[i].userid;
 	    var username = data.users[i].name;
+
+	    //connect to database to add unknown users
+	    var uclient = new pg.Client(conString);
+	    
+	    uclient.connect();
+	    
+	    uclient.on('error', function(error){
+		console.log('There was an error from uclient: (' +error+')');
+		uclient.end();
+	    });
+	
 
 	    // this catches the @ttstats bot if it's already in the room when we enter as well as when it enters
 	    if (data.users[i].name.match(/@ttstats_/) && ttstats == 0)
@@ -705,8 +706,11 @@ function addNewUsers()
 		    });
 		    
 		}
-		
+	
 	    });
+
+	    // close client for next iteration
+	    uclient.end();
 	}
 
     });

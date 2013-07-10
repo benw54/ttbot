@@ -4,6 +4,7 @@ var qs     = require('querystring'); // querystring module
 var pg     = require('pg');          // postgres module
 var sync   = require('async');       // module to run asynch calls synchronously :)
 
+
 var AUTH   = 'dNcValPLtHqLzNkHrsrfsGJb';
 var USERID = '517c27a6eb35c118e362e03e';
 var BOTNAME= 'benthebot';
@@ -21,6 +22,7 @@ var add_count = 0;
 var vote_flag = 0;
 var snag_flag = 0;
 var ttstats = 0;
+var q_flag = 0;
 var noadd = 0;
 
 
@@ -144,6 +146,11 @@ bot.on('speak', function (data)
 	else if (text.match(/^\/simma down now$/))
 	    {
 		volRelative('20', null);
+	    }
+
+	else if (text.match(/^\/vol/))
+	    {
+		volRelative(text, null);	
 	    }
 
     }
@@ -380,8 +387,10 @@ bot.on('endsong', function (data)
 	pclient.end();
     });
 
+    // check to see if we are queuing and whether we should apply queue rules
+    checkQueue();
+
     add_count = 0;
-    
 
 });
 
@@ -402,7 +411,7 @@ bot.on('update_votes', function (data)
 		     var vratio = vote_count / real_list;
 
 		     // bot votes if approval is above 40%		     
-		     if (bot_dj == 0 && vote_flag == 0 && vratio > 0.4)
+		     if (curdj != BOTNAME && vote_flag == 0 && vratio > 0.4)
 		     {
 			 bot.speak('Thumbs up!');
 			 bot.bop();
@@ -447,17 +456,13 @@ bot.on('registered', function(data){
 
     var name = data.user[0].name;
 
-    // @ttstats bot just entered, factor them into vote calculations
-    // we do this as part of addNewUsers() now, just make sure it works
-//    if (name.match(/@ttstats_/))
-//	ttstats = 1;
-
+    // log people that enter the room, it's interesting
     if (name != BOTNAME)
 	console.log(name+ ' entered the room ' +timeNow());
     
     // add users (if unknown) to db
-    addNewUsers();
-});
+    addNewUsers();}
+);
 
 bot.on('deregistered', function(data){
 
@@ -488,9 +493,10 @@ bot.on('deregistered', function(data){
 	    {
 		var name = data.users[i].name;
 
-		if (!name.match('Guest') && !name.match(BOTNAME))
+		if (!name.match('Guest') && !name.match(BOTNAME) && !name.match(/@ttstats_/))
 		    {
-			console.log(name+ ' still listenening');
+			console.log(name+ ' still listening');
+			console.log(data.users[i]); // attempting to check idle time of listener
 			audience++;
 		    }
 	    }
@@ -502,6 +508,7 @@ bot.on('deregistered', function(data){
 		bot_dj = 0;
 	    }
 	    
+	    // should probably also check the idle time of people still listening
 	    else
 		console.log('someone is still listening');
 	}
@@ -772,9 +779,22 @@ function addSongToDB(songid, artist, title)
 	    // just creating new client for query... tired of them hanging around idle
 	    var lclient = new pg.Client(conString);
 	    lclient.connect();
-	    var lastdb = lclient.query("SELECT username, to_char(date, 'MM-DD-YY') lastdate FROM play_info INNER JOIN user_info USING (userid) where songid = '" +songid+ "' ORDER BY date DESC LIMIT 1;");
+
+	    // changing to relative date
+	    var lastdb = lclient.query("SELECT username, date lastdate FROM play_info INNER JOIN user_info USING (userid) where songid = '" +songid+ "' AND username != '" +BOTNAME+ "' ORDER BY date DESC LIMIT 1;");
 	    lastdb.on('row', function(row){
-		bot.speak(':arrow_forward: Last heard ' +artist+ ' - ' +title+ ' from ' +row.username+ ' on ' +row.lastdate);
+
+
+		var diff = new Date().getTime() - new Date(row.lastdate).getTime();
+		var days = Math.round(diff / (1000*60*60*24));
+		diff %= 1000*60*60*24;
+		var hours = Math.round(diff / (1000*60*60));
+		diff %= 1000*60*60;
+		var minutes = Math.round(diff / (1000*60));
+
+		// technically, this is the time between the end of the play last time and the beginning of the song this time
+		// just think of it as the time the bot has spent not listening to the song since he last heard it and all's well :)
+		bot.speak(':arrow_forward: Last heard ' +artist+ ' - ' +title+ ' \r\nfrom ' +row.username+ ' ' +days+ 'd:' +hours+ 'h:' +minutes+ 'm ago');
 	    });
 	    lastdb.on('error', function(error){
 		console.log('There was an error from lastdb: (' +error+ ')');
@@ -992,6 +1012,8 @@ function volOnOff(toggle)
 
 function volRelative(dir, userid)
 {
+    var newvol = null;
+
     var options = {
 	host: 'voltron',
 	port: 80,
@@ -1008,20 +1030,37 @@ function volRelative(dir, userid)
 	    var timenow = new Date().getTime();
 	    if (dir.match(/\/vol\+/))
 	    {
-		var newvol = parseInt(str3) + 10;
+		newvol = parseInt(str3) + 10;
 		if (newvol > 90)
 		    newvol = 90;
 	    }
+
 	    else if (dir.match(/\/vol\-/))
 	    {
-		var newvol = parseInt(str3) - 10;
+		newvol = parseInt(str3) - 10;
 		if (newvol < 0)
 		    newvol = 0;
 	    }
 
 	    // otherwise, we are being lazy and using dir to pass in a value
 	    else
+	    {
+		console.log('Passed in value: ' +dir);
+
+		if (dir.match(/^\/vol*/))
+		{
+		    console.log('matched "vol..."');
+
+		    var subs1 = dir.slice(4);
+		    var subs2 = subs1.trim();
+		    dir = subs2;
+		}
+
 		newvol = parseInt(dir);
+
+		if (isNaN(newvol))
+		    return;
+	    }
 
 	    if (userid == null)
 		bot.speak('Changed Volume from ' +str3+ '% to ' +newvol+ '%', userid);
@@ -1056,9 +1095,6 @@ function volRelative(dir, userid)
 	    
 	    req2.write(post_data+ '\n');
 	    req2.end();
-	    
-
-
 
 	});
 	resp.on('error', function (error) {
@@ -1067,4 +1103,33 @@ function volRelative(dir, userid)
     });
     
     req.end();
+}
+
+function checkQueue()
+{
+    // zero means just whenever dj slots are full
+    // otherwise, this is the limit of real people when we start enforcing the queue
+    var queue_limit = 6;
+    var guests = 0;
+
+    bot.roomInfo(function (data){
+	var djcount = data.room.metadata.djcount;
+	var firstDJ = data.djids[0];
+
+	for (var i = 0; i < data.users.length; i++)
+	{
+	 if (data.users[i].name.match('Guest'))
+	     guests++;
+	}
+
+	var num_list = data.room.metadata.listeners -1 -ttstats -guests;
+	
+	if (djcount == 5 && num_list >= queue_limit)
+	    {
+		bot.speak('Enforcing Queue: ');
+		bot.remDj(firstDJ);
+		console.log('user to take down: ' +firstDJ);			
+	    }
+	
+    });
 }

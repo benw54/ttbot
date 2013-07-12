@@ -24,6 +24,7 @@ var snag_flag = 0;
 var ttstats = 0;
 var q_flag = 0;
 var noadd = 0;
+var escort = [];
 
 
 bot.on('speak', function (data) 
@@ -119,6 +120,14 @@ bot.on('speak', function (data)
 	leaderboard('room', name, null);
     }
 
+    // Respond to "/escort" command
+    if (text.match(/^\/escort$/))
+    {
+	console.log('adding ' +name+ ' to escort queue');
+	escort.push(name);
+	bot.speak('OK ' +name+ ', I\'ll escort you after your next song ends');
+    }
+
     // Respond to Admin commands
 
     if (name.match('benw54') || name.match('Farmer Maggie') || name.match('Safarry') || name.match('lucasmo'))
@@ -131,8 +140,7 @@ bot.on('speak', function (data)
 	}
 	
 	// Respond to command to change vol up or down
-	else if (text.match(/^\/vol(\+|\-)$/)  && 
-	    (name.match('benw54') || name.match('Farmer Maggie') || name.match('Safarry') || name.match('lucasmo')))
+	else if (text.match(/^\/vol(\+|\-)$/))
 	{
 	    volRelative(text, null);
 	}
@@ -254,6 +262,14 @@ bot.on('pmmed', function (data){
 	    leaderboard('pm', name, userid);
 	}
 
+	// Respond to "/escort" (leaderboard) command
+	else if (text.match(/^\/escort$/))
+	{
+	    console.log('adding ' +name+ ' to escort queue');
+	    escort.push(name);
+	    bot.pm('OK ' +name+ ', I\'ll escort you after your next song ends', userid);
+	}
+	
 ////////// ADMIN COMMANDS /////////////////////////////////////
 
 	// TBD: store user rights in db and query for isadmin instead of hardcoding usernames
@@ -386,6 +402,9 @@ bot.on('endsong', function (data)
 	// no row is returned from this query, so using callback style to kill pclient
 	pclient.end();
     });
+
+    // check escort queue
+    checkEscort(username, userid);
 
     // check to see if we are queuing and whether we should apply queue rules
     checkQueue();
@@ -734,7 +753,7 @@ function pmCMD(name, userid)
     bot.pm('These are the commands I understand:\n\n', userid, function(){
 	bot.pm('/hello   --> I say hello to you\n\n', userid, function(){
 	    bot.pm('/votes   --> the vote count for current song\n\n', userid, function(){
-		bot.pm('/bop     --> I vote for the current song\n\n', userid, function(){
+		bot.pm('/escort  --> I\'ll remove you from the stage after your next song finishes\n\n', userid, function(){
 		    bot.pm('/botup   --> I get up and DJ\n\n', userid, function(){
 			bot.pm('/botdown --> I stop DJing\n\n', userid, function(){
 			    bot.pm('/skip    --> if DJing, I skip the current song\n\n', userid, function(){
@@ -1126,10 +1145,35 @@ function checkQueue()
 	
 	if (djcount == 5 && num_list >= queue_limit)
 	    {
-		bot.speak('Enforcing Queue: ');
-		bot.remDj(firstDJ);
-		console.log('user to take down: ' +firstDJ);			
+
+		bot.remDj(firstDJ, function(){
+		    bot.speak(':warning: Enforcing Queue :warning:');
+		});
 	    }
 	
     });
+}
+
+function checkEscort(cur_djname, cur_djid)
+{
+    var rem_ind = null;
+
+    if (escort.length == 0)
+	return;
+
+    for (var i = 0; i < escort.length; i++)
+    {
+	console.log('should escort: ' +escort[i]);
+	if (escort[i] == cur_djname)
+	{
+	    console.log('userid ' +cur_djid+ ' should be removed');
+	    bot.remDj(cur_djid, function (){
+		bot.speak(':exclamation: ' +cur_djname+ ' requested to be escorted :exclamation:');
+	    });
+
+	    // removing instance(s) of dj's name from escort queue
+	    for (rem = escort.indexOf(cur_djname); rem != -1; rem = escort.indexOf(cur_djname))
+		 escort.splice(rem,1);
+	}
+    }
 }

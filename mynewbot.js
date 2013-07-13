@@ -42,7 +42,7 @@ bot.on('speak', function (data)
     }
     
     //Respond to "/bop" command
-    if (text.match(/^\/bop$/))
+    else if (text.match(/^\/bop$/))
     {
 	console.log('About to Bop');
 //	console.log(data);
@@ -66,7 +66,7 @@ bot.on('speak', function (data)
     }	
 
     //Respond to "/votes" command
-    if (text.match(/^\/votes$/))
+    else if (text.match(/^\/votes$/))
     {
 	bot.roomInfo(false, function(data){
 	    var up = data.room.metadata.upvotes;
@@ -77,13 +77,13 @@ bot.on('speak', function (data)
     }
 
     //Respond to "/info" command
-    if (text.match(/^\/info$/))
+    else if (text.match(/^\/info$/))
     {
 	pmCMD(data.name, data.userid);
     }
 
-    //Respond to "/botup" command
-    if (text.match(/^\/botup$/))
+    //Respond to "/bot up" command
+    else if (text.match(/^\/bot up$/))
     {
 	console.log(name+ ' wants bot to DJ');
 	shuffle(function(){
@@ -92,8 +92,8 @@ bot.on('speak', function (data)
 	});
     }
 
-    //Respond to "/botdown" command
-    if (text.match(/^\/botdown$/))
+    //Respond to "/bot down" command
+    else if (text.match(/^\/bot down$/))
     {
 	console.log(name+ ' wants bot to stop DJing');
 	bot.remDj(USERID);
@@ -101,7 +101,7 @@ bot.on('speak', function (data)
     }
 
     //Respond to "/skip" command
-    if (text.match(/^\/skip$/))
+    else if (text.match(/^\/skip$/))
     {
 	console.log(name+ ' wants bot to skip the song');
 	if (bot_dj == 1)
@@ -115,13 +115,13 @@ bot.on('speak', function (data)
     }
 
     // Respond to "/lb" (leaderboard) command
-    if (text.match(/^\/lb$/))
+    else if (text.match(/^\/lb$/))
     {
 	leaderboard('room', name, null);
     }
 
     // Respond to "/escort" command
-    if (text.match(/^\/escort$/))
+    else if (text.match(/^\/escort$/))
     {
 	console.log('adding ' +name+ ' to escort queue');
 	escort.push(name);
@@ -130,11 +130,11 @@ bot.on('speak', function (data)
 
     // Respond to Admin commands
 
-    if (name.match('benw54') || name.match('Farmer Maggie') || name.match('Safarry') || name.match('lucasmo'))
+    else if (name.match('benw54') || name.match('Farmer Maggie') || name.match('Safarry') || name.match('lucasmo'))
     {
 
 	// Respond to mute / unmute commands
-	if (text.match(/^\/(mute|unmute)$/))
+	else if (text.match(/^\/(mute|unmute)$/))
 	{
 	    volOnOff(text);
 	}
@@ -164,7 +164,7 @@ bot.on('speak', function (data)
     }
    
     // Respond to "/stats" command
-    if (text.match(/^\/stats$/))
+    else if (text.match(/^\/stats$/))
     {
 	stats('room', name, null);
     }
@@ -194,8 +194,8 @@ bot.on('pmmed', function (data){
 	    bot.pm('Current song votes - up: ' +up+ ' down: ' +down, userid);
 	}
 	
-	//Respond to "/botup" command
-	else if (text.match(/^\/botup$/))
+	//Respond to "/bot up" command
+	else if (text.match(/^\/bot up$/))
 	{
 	    console.log(name+ ' wants bot to DJ');
 	    shuffle(function(){
@@ -204,8 +204,8 @@ bot.on('pmmed', function (data){
 	    });
 	}
 	
-	//Respond to "/botdown" command
-	else if (text.match(/^\/botdown$/))
+	//Respond to "/bot down" command
+	else if (text.match(/^\/bot down$/))
 	{
 	    console.log(name+ ' wants bot to stop DJing');
 	    bot.remDj(USERID);

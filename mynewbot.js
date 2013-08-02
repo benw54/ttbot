@@ -673,7 +673,7 @@ function addNewUsers()
 	    // Documentation mentions Result object... look into that more
 	    
 	    var userdb = uclient.query("SELECT count(*) num, (SELECT username from user_info where userid = '" +userid+ "'), '" +i+ "' qn from user_info WHERE userid = '" +userid+ "';");
-//	    console.log('db query: ' +username+ ' - ' +userid+ ' i: ' +i);
+	    console.log('db query: ' +username+ ' - ' +userid+ ' i: ' +i);
 	    
 	    userdb.on('error', function(error){
 		console.log('There was an error from userdb: (' +error+ ')');
@@ -732,11 +732,14 @@ function addNewUsers()
 		    });
 		    
 		}
-	
+
 	    });
 
+	    // this is closing the client before the row event fires... not good
+	    // No end event fires for this query. Why not!??? Cannot close the specific client at the right time :(
 	    // close client for next iteration
-	    uclient.end();
+	    //	    uclient.end();
+
 	}
 
     });
